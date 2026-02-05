@@ -5,7 +5,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { CSSProperties } from 'react'
-import { Server, ShieldCheck, Activity, Mail, Lock, ArrowRight, Moon, Sun } from 'lucide-react'
+import { Server, ShieldCheck, Activity, Mail, Lock, ArrowRight, Moon, Sun, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   // Cargar modo oscuro desde localStorage
   useEffect(() => {
@@ -159,7 +160,7 @@ export default function LoginPage() {
                     Contraseña
                   </label>
                   <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    ¿Problemas? Contacta a Sistemas
+                    ¡Si tienes problemas! Contacta a Sistemas
                   </span>
                 </div>
                 <div className="relative">
@@ -167,13 +168,24 @@ export default function LoginPage() {
                   <input
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className={`w-full rounded-lg border ${darkMode ? 'border-slate-700 bg-slate-800 text-white placeholder-slate-500' : 'border-slate-200 bg-white text-slate-900'} py-3 pl-10 pr-4 text-sm shadow-sm outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]`}
+                    className={`w-full rounded-lg border ${darkMode ? 'border-slate-700 bg-slate-800 text-white placeholder-slate-500' : 'border-slate-200 bg-white text-slate-900'} py-3 pl-10 pr-10 text-sm shadow-sm outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-slate-100 ${darkMode ? 'text-slate-500 hover:bg-slate-700' : 'text-slate-400'} transition-colors`}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
 
