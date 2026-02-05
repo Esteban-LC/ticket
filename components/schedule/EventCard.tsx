@@ -30,6 +30,7 @@ interface EventCardProps {
     }
     onDelete?: (id: string) => void
     onEdit?: (id: string) => void
+    compact?: boolean
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -54,7 +55,7 @@ const STATUS_COLORS: Record<string, string> = {
     CANCELLED: 'bg-gray-100 text-gray-800'
 }
 
-export default function EventCard({ event, onDelete, onEdit }: EventCardProps) {
+export default function EventCard({ event, onDelete, onEdit, compact }: EventCardProps) {
     const startDate = new Date(event.startDate)
     const endDate = event.endDate ? new Date(event.endDate) : null
 
@@ -71,6 +72,25 @@ export default function EventCard({ event, onDelete, onEdit }: EventCardProps) {
             month: 'long',
             year: 'numeric'
         })
+    }
+
+    if (compact) {
+        return (
+            <div
+                onClick={(e) => {
+                    e.stopPropagation()
+                    if (onEdit) onEdit(event.id)
+                }}
+                className="group relative flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-slate-800 border-l-2 text-xs hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-r cursor-pointer overflow-hidden"
+                style={{ borderLeftColor: event.color || '#3b82f6' }}
+                title={`${event.title} - ${formatTime(startDate)}`}
+            >
+                <div className="flex-1 truncate font-medium text-gray-700 dark:text-gray-200">
+                    {!event.allDay && <span className="opacity-75 mr-1">{formatTime(startDate)}</span>}
+                    {event.title}
+                </div>
+            </div>
+        )
     }
 
     return (

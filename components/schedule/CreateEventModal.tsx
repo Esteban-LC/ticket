@@ -160,15 +160,15 @@ export default function CreateEventModal({
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                    <h2 className="text-2xl font-bold text-gray-900">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                         {eventToEdit ? 'Editar Evento' : 'Nuevo Evento'}
                     </h2>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500 dark:text-gray-400"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -184,7 +184,7 @@ export default function CreateEventModal({
 
                     {/* Título */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Título *
                         </label>
                         <input
@@ -192,21 +192,21 @@ export default function CreateEventModal({
                             required
                             value={formData.title}
                             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                             placeholder="Nombre del evento"
                         />
                     </div>
 
                     {/* Descripción */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Descripción
                         </label>
                         <textarea
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                             rows={3}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                             placeholder="Detalles del evento"
                         />
                     </div>
@@ -220,7 +220,7 @@ export default function CreateEventModal({
                             onChange={(e) => setFormData({ ...formData, allDay: e.target.checked })}
                             className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                         />
-                        <label htmlFor="allDay" className="text-sm font-medium text-gray-700">
+                        <label htmlFor="allDay" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             Todo el día
                         </label>
                     </div>
@@ -228,7 +228,7 @@ export default function CreateEventModal({
                     {/* Fechas */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Fecha de inicio *
                             </label>
                             <input
@@ -236,13 +236,13 @@ export default function CreateEventModal({
                                 required
                                 value={formData.startDate}
                                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                             />
                         </div>
 
                         {!formData.allDay && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Hora de inicio *
                                 </label>
                                 <input
@@ -250,7 +250,7 @@ export default function CreateEventModal({
                                     required={!formData.allDay}
                                     value={formData.startTime}
                                     onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                                 />
                             </div>
                         )}
@@ -258,27 +258,27 @@ export default function CreateEventModal({
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Fecha de fin
                             </label>
                             <input
                                 type="date"
                                 value={formData.endDate}
                                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                             />
                         </div>
 
                         {!formData.allDay && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Hora de fin
                                 </label>
                                 <input
                                     type="time"
                                     value={formData.endTime}
                                     onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                                 />
                             </div>
                         )}
@@ -287,13 +287,13 @@ export default function CreateEventModal({
                     {/* Tipo y Estado */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Tipo *
                             </label>
                             <select
                                 value={formData.type}
                                 onChange={(e) => handleTypeChange(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                             >
                                 {EVENT_TYPES.map(type => (
                                     <option key={type.value} value={type.value}>
@@ -304,13 +304,13 @@ export default function CreateEventModal({
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Estado *
                             </label>
                             <select
                                 value={formData.status}
                                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                             >
                                 {EVENT_STATUSES.map(status => (
                                     <option key={status.value} value={status.value}>
@@ -323,26 +323,26 @@ export default function CreateEventModal({
 
                     {/* Color */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Color
                         </label>
                         <input
                             type="color"
                             value={formData.color}
                             onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                            className="w-20 h-10 border border-gray-300 rounded-lg cursor-pointer"
+                            className="w-20 h-10 border border-gray-300 dark:border-slate-600 rounded-lg cursor-pointer bg-white dark:bg-slate-700"
                         />
                     </div>
 
                     {/* Ticket relacionado */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Ticket relacionado (opcional)
                         </label>
                         <select
                             value={formData.ticketId}
                             onChange={(e) => setFormData({ ...formData, ticketId: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                         >
                             <option value="">Sin ticket relacionado</option>
                             {tickets.map(ticket => (
@@ -354,11 +354,11 @@ export default function CreateEventModal({
                     </div>
 
                     {/* Botones */}
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                            className="px-6 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors font-medium"
                         >
                             Cancelar
                         </button>
