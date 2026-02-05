@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
 import TwoFactorSettings from '@/components/settings/TwoFactorSettings'
-import { Settings as SettingsIcon, Building2, Mail, Globe, Shield } from 'lucide-react'
+import { Settings as SettingsIcon, Building2, Mail, Globe, Shield, Bell, Database, Download, Save, Calendar, User, Layout, Link as LinkIcon } from 'lucide-react'
 
 export const metadata = {
   title: 'Configuración | Tickets LICEO MICHOACANO',
@@ -124,41 +124,8 @@ export default async function SettingsPage() {
 
             {/* Secciones de Configuración */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mt-6 lg:mt-8">
-              {/* Configuración General */}
-              <div className="bg-gray-50 dark:bg-slate-800 rounded-lg shadow border border-gray-200 dark:border-slate-700">
-                <div className="p-4 lg:p-6 border-b border-gray-200 dark:border-slate-700">
-                  <div className="flex items-center space-x-3">
-                    <Building2 className="h-5 w-5 lg:h-6 lg:w-6 text-primary-600" />
-                    <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Información General</h2>
-                  </div>
-                </div>
-                <div className="p-4 lg:p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Nombre de la Organización
-                    </label>
-                    <input
-                      type="text"
-                      defaultValue="Tickets LICEO MICHOACANO"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      disabled
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Próximamente editable</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Email de Soporte
-                    </label>
-                    <input
-                      type="email"
-                      defaultValue="soporte@liceomichoacano.mx"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      disabled
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Próximamente editable</p>
-                  </div>
-                </div>
-              </div>
+
+
 
               {/* Configuración de Sistema */}
               <div className="bg-gray-50 dark:bg-slate-800 rounded-lg shadow border border-gray-200 dark:border-slate-700">
@@ -181,6 +148,59 @@ export default async function SettingsPage() {
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Última Actualización</p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">20 de diciembre de 2025</p>
                   </div>
+                </div>
+              </div>
+
+              {/* Preferencias de Notificaciones */}
+              <div className="bg-gray-50 dark:bg-slate-800 rounded-lg shadow border border-gray-200 dark:border-slate-700">
+                <div className="p-4 lg:p-6 border-b border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center space-x-3">
+                    <Bell className="h-5 w-5 lg:h-6 lg:w-6 text-yellow-600" />
+                    <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Notificaciones</h2>
+                  </div>
+                </div>
+                <div className="p-4 lg:p-6 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Alertas por correo</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Recibir copia al crear nuevos tickets</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" defaultChecked />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Notificar Cierres</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Avisar cuando se finalice un ticket</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" defaultChecked />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+
+
+              {/* Copia de Seguridad */}
+              <div className="bg-gray-50 dark:bg-slate-800 rounded-lg shadow border border-gray-200 dark:border-slate-700">
+                <div className="p-4 lg:p-6 border-b border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center space-x-3">
+                    <Database className="h-5 w-5 lg:h-6 lg:w-6 text-emerald-600" />
+                    <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Copia de Seguridad</h2>
+                  </div>
+                </div>
+                <div className="p-4 lg:p-6 space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Descarga una copia completa de todos los tickets y usuarios registrados en formato JSON.
+                  </p>
+                  <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors">
+                    <Download className="h-4 w-4" />
+                    Exportar Base de Datos
+                  </button>
                 </div>
               </div>
             </div>

@@ -11,7 +11,8 @@ import {
   Tag,
   Calendar,
   X,
-  FileText
+  FileText,
+  Layout
 } from 'lucide-react'
 import { useSidebar } from '@/contexts/SidebarContext'
 import UserMenu from './UserMenu'
@@ -37,6 +38,8 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
     { name: 'Tickets', href: '/dashboard/tickets', icon: MessageSquare, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
     { name: 'Reportes', href: '/dashboard/reportes', icon: FileText, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
     { name: 'Cronograma', href: '/dashboard/schedule', icon: Calendar, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
+    { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
+    { name: 'Resultados', href: '/dashboard/resultados', icon: Layout, roles: ['ADMIN'] },
     { name: 'Categorías', href: '/dashboard/categories', icon: Tag, roles: ['AGENT', 'ADMIN'] },
     { name: 'Usuarios', href: '/dashboard/users', icon: Users, roles: ['ADMIN'] },
     { name: 'Configuración', href: '/dashboard/settings', icon: Settings, roles: ['ADMIN'] },

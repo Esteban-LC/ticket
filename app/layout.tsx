@@ -9,6 +9,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Tickets LICEO MICHOACANO',
   description: 'Plataforma de gestión de tickets para LICEO MICHOACANO',
+  icons: {
+    icon: '/img/favicon.ico',
+  },
 }
 
 export default function RootLayout({
