@@ -215,9 +215,6 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <Plus className="h-4 w-4" />
                                     Nuevo Evento
                                 </button>
-                                <button className="p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700">
-                                    <Download className="h-5 w-5" />
-                                </button>
                             </div>
                         </div>
 
@@ -256,7 +253,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
                                     {items.map((item) => (
-                                        <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer" onClick={() => handleEditClick(item)}>
+                                        <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                                             <td className="px-6 py-4 font-medium text-gray-500">{item.id}</td>
                                             <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{item.project}</td>
                                             <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{item.subproject || '-'}</td>
@@ -324,7 +321,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <input
                                         type="text"
                                         required
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={newItem.project || ''}
                                         onChange={(e) => setNewItem({ ...newItem, project: e.target.value })}
                                     />
@@ -333,7 +330,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subproyecto / Componente</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={newItem.subproject || ''}
                                         onChange={(e) => setNewItem({ ...newItem, subproject: e.target.value })}
                                     />
@@ -342,7 +339,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Entregable</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={newItem.deliverable || ''}
                                         onChange={(e) => setNewItem({ ...newItem, deliverable: e.target.value })}
                                     />
@@ -351,7 +348,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Responsable</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={newItem.responsible || ''}
                                         onChange={(e) => setNewItem({ ...newItem, responsible: e.target.value })}
                                     />
@@ -361,7 +358,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <input
                                         type="text"
                                         placeholder="Ej. lunes 22 de junio"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={newItem.date || ''}
                                         onChange={(e) => setNewItem({ ...newItem, date: e.target.value })}
                                     />
@@ -369,7 +366,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
                                     <select
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={newItem.status || ''}
                                         onChange={(e) => setNewItem({ ...newItem, status: e.target.value as any })}
                                     >
@@ -383,7 +380,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link / Documento</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={newItem.link || ''}
                                         onChange={(e) => setNewItem({ ...newItem, link: e.target.value })}
                                     />
@@ -391,7 +388,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observaciones</label>
                                     <textarea
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         rows={2}
                                         value={newItem.observations || ''}
                                         onChange={(e) => setNewItem({ ...newItem, observations: e.target.value })}
@@ -432,7 +429,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <input
                                         type="text"
                                         required
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={editItem.project || ''}
                                         onChange={(e) => setEditItem({ ...editItem, project: e.target.value })}
                                     />
@@ -441,7 +438,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subproyecto / Componente</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={editItem.subproject || ''}
                                         onChange={(e) => setEditItem({ ...editItem, subproject: e.target.value })}
                                     />
@@ -450,7 +447,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Entregable</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={editItem.deliverable || ''}
                                         onChange={(e) => setEditItem({ ...editItem, deliverable: e.target.value })}
                                     />
@@ -459,7 +456,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Responsable</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={editItem.responsible || ''}
                                         onChange={(e) => setEditItem({ ...editItem, responsible: e.target.value })}
                                     />
@@ -469,7 +466,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <input
                                         type="text"
                                         placeholder="Ej. lunes 22 de junio"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={editItem.date || ''}
                                         onChange={(e) => setEditItem({ ...editItem, date: e.target.value })}
                                     />
@@ -477,7 +474,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label>
                                     <select
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={editItem.status || ''}
                                         onChange={(e) => setEditItem({ ...editItem, status: e.target.value as any })}
                                     >
@@ -491,7 +488,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link / Documento</label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         value={editItem.link || ''}
                                         onChange={(e) => setEditItem({ ...editItem, link: e.target.value })}
                                     />
@@ -499,7 +496,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observaciones</label>
                                     <textarea
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
                                         rows={2}
                                         value={editItem.observations || ''}
                                         onChange={(e) => setEditItem({ ...editItem, observations: e.target.value })}
