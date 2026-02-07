@@ -35,3 +35,8 @@ next-env.d.ts
 
 # prisma
 prisma/migrations
+
+# Google credentials
+google-credentials.json
+*-credentials.json
+*-service-account.json
