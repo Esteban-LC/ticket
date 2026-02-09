@@ -5,7 +5,12 @@ import fs from 'fs'
 function getCredentials() {
   // Opción 1: JSON completo directo en variable de entorno (para Vercel/producción)
   if (process.env.GOOGLE_CREDENTIALS_JSON) {
-    return JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+    // Convertir los \n literales de la private_key en saltos de línea reales
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
+    }
+    return credentials
   }
 
   // Opción 2: Archivo JSON local (para desarrollo local)
