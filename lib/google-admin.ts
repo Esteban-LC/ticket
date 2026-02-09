@@ -2,37 +2,84 @@ import { google } from 'googleapis'
 import path from 'path'
 import fs from 'fs'
 
+function findCredentialsFile(): string | null {
+  // Buscar archivos de credenciales JSON en la raíz del proyecto
+  const cwd = process.cwd()
+  const candidates = [
+    process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    path.join(cwd, 'google-credentials.json'),
+    path.join(cwd, 'gmail-correo-447916-88771ea8dd50.json'),
+  ].filter(Boolean) as string[]
+
+  // También buscar cualquier archivo que coincida con patrones comunes de service account
+  try {
+    const files = fs.readdirSync(cwd)
+    for (const file of files) {
+      if (file.endsWith('.json') && (file.includes('credentials') || file.includes('service-account') || file.includes('gmail-correo'))) {
+        const fullPath = path.join(cwd, file)
+        if (!candidates.includes(fullPath)) {
+          candidates.push(fullPath)
+        }
+      }
+    }
+  } catch {
+    // Ignorar errores al listar directorio
+  }
+
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) {
+      return filePath
+    }
+  }
+  return null
+}
+
+function normalizePrivateKey(key: string): string {
+  let normalized = key
+    .replace(/\\\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .trim()
+
+  if (!normalized.includes('-----BEGIN')) {
+    throw new Error('GOOGLE_PRIVATE_KEY no contiene un header PEM válido (-----BEGIN PRIVATE KEY-----)')
+  }
+
+  return normalized
+}
+
 function getCredentials() {
-  // Opción 1: Variables individuales (más confiable para .env y Vercel)
+  // Opción 1 (PRIORITARIA): Archivo JSON local — no tiene problemas de escape
+  const credentialsFile = findCredentialsFile()
+  if (credentialsFile) {
+    console.log('[Google Admin] Usando credenciales desde archivo:', credentialsFile)
+    return JSON.parse(fs.readFileSync(credentialsFile, 'utf-8'))
+  }
+
+  // Opción 2: Variables individuales (para Vercel/deployments)
   if (process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+    console.log('[Google Admin] Usando credenciales desde variables de entorno individuales')
+    const privateKey = normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY)
     return {
       type: 'service_account',
       project_id: process.env.GOOGLE_PROJECT_ID || '',
-      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      private_key: privateKey,
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       token_uri: 'https://oauth2.googleapis.com/token',
     }
   }
 
-  // Opción 2: JSON completo en variable de entorno
+  // Opción 3: JSON completo en variable de entorno
   if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    console.log('[Google Admin] Usando credenciales desde GOOGLE_CREDENTIALS_JSON')
     const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
     if (credentials.private_key) {
-      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
+      credentials.private_key = normalizePrivateKey(credentials.private_key)
     }
     return credentials
   }
 
-  // Opción 3: Archivo JSON local
-  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
-    || path.join(process.cwd(), 'google-credentials.json')
-
-  if (fs.existsSync(credentialsPath)) {
-    return JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'))
-  }
-
   throw new Error(
-    'No se encontraron credenciales de Google. Configura GOOGLE_PRIVATE_KEY y GOOGLE_SERVICE_ACCOUNT_EMAIL en tu .env'
+    'No se encontraron credenciales de Google. Coloca el archivo JSON de service account en la raíz del proyecto, o configura GOOGLE_PRIVATE_KEY y GOOGLE_SERVICE_ACCOUNT_EMAIL en tu .env'
   )
 }
 
