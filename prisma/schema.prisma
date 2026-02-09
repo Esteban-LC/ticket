@@ -65,6 +65,7 @@ model User {
   messages          Message[]
   interactions      Interaction[]
   events            Event[]
+  adminLogs         AdminLog[]
 
 }
 
@@ -214,4 +215,30 @@ model Event {
   @@index([userId])
   @@index([startDate])
   @@index([ticketId])
+}
+
+// === AUDIT LOG ===
+
+enum AdminAction {
+  CREATE_USER
+  UPDATE_USER
+  DELETE_USER
+  SUSPEND_USER
+  UNSUSPEND_USER
+}
+
+model AdminLog {
+  id            String      @id @default(cuid())
+  action        AdminAction
+  adminId       String
+  adminEmail    String
+  targetEmail   String
+  targetName    String?
+  details       Json?
+  createdAt     DateTime    @default(now())
+
+  admin         User        @relation(fields: [adminId], references: [id])
+
+  @@index([createdAt])
+  @@index([adminId])
 }
