@@ -2,20 +2,30 @@ import { google } from 'googleapis'
 import path from 'path'
 import fs from 'fs'
 
-function getAuth() {
-  // Opción 1: Variable de entorno con la ruta al archivo JSON
+function getCredentials() {
+  // Opción 1: JSON completo directo en variable de entorno (para Vercel/producción)
+  if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    return JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+  }
+
+  // Opción 2: Archivo JSON local (para desarrollo local)
   const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
     || path.join(process.cwd(), 'google-credentials.json')
 
-  if (!fs.existsSync(credentialsPath)) {
-    throw new Error(
-      'No se encontró el archivo de credenciales de Google. ' +
-      'Coloca tu archivo google-credentials.json en la raíz del proyecto ' +
-      'o configura GOOGLE_APPLICATION_CREDENTIALS en tu .env'
-    )
+  if (fs.existsSync(credentialsPath)) {
+    return JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'))
   }
 
-  const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'))
+  throw new Error(
+    'No se encontraron credenciales de Google. Configura una de estas opciones:\n' +
+    '1. GOOGLE_CREDENTIALS_JSON en .env (pega todo el JSON como string)\n' +
+    '2. Archivo google-credentials.json en la raíz del proyecto\n' +
+    '3. GOOGLE_APPLICATION_CREDENTIALS con la ruta al archivo JSON'
+  )
+}
+
+function getAuth() {
+  const credentials = getCredentials()
 
   // El subject debe ser un admin del dominio que delegó acceso a la service account
   const subject = process.env.GOOGLE_ADMIN_EMAIL
