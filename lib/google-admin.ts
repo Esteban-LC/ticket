@@ -3,17 +3,27 @@ import path from 'path'
 import fs from 'fs'
 
 function getCredentials() {
-  // Opción 1: JSON completo directo en variable de entorno (para Vercel/producción)
+  // Opción 1: Variables individuales (más confiable para .env y Vercel)
+  if (process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+    return {
+      type: 'service_account',
+      project_id: process.env.GOOGLE_PROJECT_ID || '',
+      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      token_uri: 'https://oauth2.googleapis.com/token',
+    }
+  }
+
+  // Opción 2: JSON completo en variable de entorno
   if (process.env.GOOGLE_CREDENTIALS_JSON) {
     const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
-    // Convertir los \n literales de la private_key en saltos de línea reales
     if (credentials.private_key) {
       credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
     }
     return credentials
   }
 
-  // Opción 2: Archivo JSON local (para desarrollo local)
+  // Opción 3: Archivo JSON local
   const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
     || path.join(process.cwd(), 'google-credentials.json')
 
@@ -22,10 +32,7 @@ function getCredentials() {
   }
 
   throw new Error(
-    'No se encontraron credenciales de Google. Configura una de estas opciones:\n' +
-    '1. GOOGLE_CREDENTIALS_JSON en .env (pega todo el JSON como string)\n' +
-    '2. Archivo google-credentials.json en la raíz del proyecto\n' +
-    '3. GOOGLE_APPLICATION_CREDENTIALS con la ruta al archivo JSON'
+    'No se encontraron credenciales de Google. Configura GOOGLE_PRIVATE_KEY y GOOGLE_SERVICE_ACCOUNT_EMAIL en tu .env'
   )
 }
 
