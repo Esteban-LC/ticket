@@ -154,7 +154,8 @@ export default function WorkspaceClient() {
   }
 
   const handleSelectOrgUnit = (path: string | null) => {
-    setSelectedOrgUnit(path)
+    // "/" = raíz = mostrar todos (sin filtro)
+    setSelectedOrgUnit(path === '/' ? null : path)
     setActiveTab('users')
   }
 

@@ -126,9 +126,19 @@ export async function listWorkspaceUsers(params?: {
   const directory = getAdminDirectory()
   const customer = process.env.GOOGLE_CUSTOMER_ID || 'my_customer'
 
+  // Construir el query combinando búsqueda de texto y orgUnitPath
+  const queryParts: string[] = []
+  if (params?.query) {
+    queryParts.push(params.query)
+  }
+  if (params?.orgUnitPath) {
+    queryParts.push(`orgUnitPath='${params.orgUnitPath}'`)
+  }
+  const query = queryParts.length > 0 ? queryParts.join(' ') : undefined
+
   const response = await directory.users.list({
     customer,
-    query: params?.query || undefined,
+    query,
     maxResults: params?.maxResults || 100,
     pageToken: params?.pageToken || undefined,
     orderBy: 'familyName',
