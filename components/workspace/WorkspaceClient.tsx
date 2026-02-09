@@ -342,6 +342,7 @@ export default function WorkspaceClient() {
       {showCreateModal && (
         <CreateUserModal
           orgUnits={orgUnits}
+          defaultOrgUnitPath={selectedOrgUnit}
           onClose={() => setShowCreateModal(false)}
           onCreated={handleUserCreated}
         />
