@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     })
 
     // Enviar email al cliente si no es mensaje interno y el cliente tiene notificaciones activadas
-    if (!isInternal && message.ticket.customer.emailNotifications && message.author.role !== 'CUSTOMER') {
+    if (!isInternal && message.ticket.customer.emailNotifications && message.author.role !== 'VIEWER' && message.author.role !== 'EDITOR') {
       const emailTemplate = getTicketReplyEmailTemplate({
         customerName: message.ticket.customer.name || message.ticket.customer.email,
         ticketNumber: message.ticket.number,

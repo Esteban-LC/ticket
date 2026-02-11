@@ -19,22 +19,22 @@ export default async function EditCustomerPage({
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true }
+    select: { id: true, name: true, email: true, role: true, permissions: true }
   })
 
   if (!user) {
     redirect('/login')
   }
 
-  // Validar que CUSTOMER no pueda acceder a esta página
-  if (user.role === 'CUSTOMER') {
+  // Solo ADMIN puede acceder a esta página
+  if (user.role !== 'ADMIN') {
     redirect('/dashboard')
   }
 
   const customer = await prisma.user.findUnique({
     where: { 
       id: params.id,
-      role: 'CUSTOMER'
+      role: 'VIEWER'
     },
     select: {
       id: true,
@@ -57,7 +57,7 @@ export default async function EditCustomerPage({
     notFound()
   }
 
-  // AGENT y ADMIN ven todos los tickets
+  // ADMIN ve todos los tickets
   const openTicketsCount = await prisma.ticket.count({ where: { status: 'OPEN' } })
 
   return (

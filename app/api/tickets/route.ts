@@ -37,10 +37,21 @@ export async function GET(request: Request) {
       ...(priority && { priority: priority as any }),
     }
 
-    // Si es CUSTOMER, solo puede ver sus propios tickets
-    if (user.role === 'CUSTOMER') {
+    // Filtrar tickets según rol
+    if (user.role === 'COORDINATOR') {
+      // COORDINATOR ve tickets de su departamento
+      const fullUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { departmentId: true }
+      })
+      if (fullUser?.departmentId) {
+        whereClause.customer = { departmentId: fullUser.departmentId }
+      }
+    } else if (user.role === 'EDITOR' || user.role === 'VIEWER') {
+      // EDITOR y VIEWER solo ven tickets que crearon
       whereClause.customerId = user.id
     }
+    // ADMIN ve todos los tickets
 
     const tickets = await prisma.ticket.findMany({
       where: whereClause,

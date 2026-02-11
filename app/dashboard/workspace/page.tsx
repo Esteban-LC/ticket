@@ -15,7 +15,7 @@ export default async function WorkspacePage() {
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true }
+    select: { id: true, name: true, email: true, role: true, permissions: true }
   })
 
   if (!user) {

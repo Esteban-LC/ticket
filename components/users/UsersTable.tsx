@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { UserRole } from '@prisma/client'
 import { useRouter } from 'next/navigation'
-import { Mail, Phone, MapPin, Ticket, UserCog } from 'lucide-react'
+import { Mail, Phone, Ticket, UserCog } from 'lucide-react'
 import EditUserModal from './EditUserModal'
 
 interface User {
@@ -15,7 +15,7 @@ interface User {
   avatar: string | null
   role: UserRole
   phone: string | null
-  location: string | null
+  permissions: string[]
   createdAt: Date
   department?: {
     id: string
@@ -34,8 +34,9 @@ interface UsersTableProps {
 
 const roleLabels = {
   ADMIN: 'Administrador',
-  AGENT: 'Técnico',
-  CUSTOMER: 'Usuario',
+  COORDINATOR: 'Coordinador',
+  EDITOR: 'Editor',
+  VIEWER: 'Lector',
 }
 
 const departmentColors: Record<string, string> = {
@@ -109,12 +110,6 @@ export default function UsersTable({ users }: UsersTableProps) {
                   </div>
                 )}
 
-                {user.location && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <MapPin className="h-4 w-4 mr-2" />
-                    <span>{user.location}</span>
-                  </div>
-                )}
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 grid grid-cols-2 gap-4">
@@ -128,7 +123,7 @@ export default function UsersTable({ users }: UsersTableProps) {
                   </p>
                 </div>
 
-                {user.role === 'AGENT' && (
+                {(user.role === 'ADMIN' || user.role === 'COORDINATOR') && (
                   <div>
                     <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                       <Ticket className="h-3 w-3 mr-1" />

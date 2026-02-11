@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { X } from 'lucide-react'
+import { X, Shield, KeyRound } from 'lucide-react'
 
 interface Department {
   id: string
@@ -11,13 +11,18 @@ interface Department {
   isAdmin: boolean
 }
 
+const AVAILABLE_PERMISSIONS = [
+  { key: 'workspace:access', label: 'Workspace', description: 'Acceso al espacio de trabajo compartido para registrar' },
+]
+
 interface EditUserModalProps {
   user: {
     id: string
     name: string | null
     email: string
     phone: string | null
-    location: string | null
+    role: string
+    permissions?: string[]
     department?: {
       id: string
       name: string
@@ -35,24 +40,32 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
     name: user.name || '',
     departmentId: user.department?.id || '',
     phone: user.phone || '',
-    location: user.location || '',
+    role: user.role || 'EDITOR',
+    permissions: user.permissions || [] as string[],
     newPassword: '',
   })
 
   const isCurrentUser = session?.user?.id === user.id
 
   useEffect(() => {
-    // Fetch departments
     fetch('/api/departments')
       .then(res => res.json())
       .then(data => setDepartments(data))
       .catch(err => console.error('Error fetching departments:', err))
   }, [])
 
+  const togglePermission = (key: string) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(key)
+        ? prev.permissions.filter(p => p !== key)
+        : [...prev.permissions, key]
+    }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validar longitud de contraseña si se proporciona
     if (formData.newPassword && formData.newPassword.length < 6) {
       alert('La contraseña debe tener al menos 6 caracteres')
       return
@@ -61,12 +74,12 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
     setLoading(true)
 
     try {
-      // Solo enviar la contraseña si se proporcionó una nueva
       const updateData: any = {
         name: formData.name,
         departmentId: formData.departmentId || null,
         phone: formData.phone,
-        location: formData.location,
+        role: formData.role,
+        permissions: formData.permissions,
       }
 
       if (formData.newPassword) {
@@ -112,14 +125,12 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
     }
   }
 
-  const selectedDepartment = departments.find(d => d.id === formData.departmentId)
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen px-4">
         <div className="fixed inset-0 bg-black opacity-30" onClick={onClose}></div>
 
-        <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Editar Usuario</h2>
             <button
@@ -168,18 +179,81 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                 <option value="">Sin departamento</option>
                 {departments.map((dept) => (
                   <option key={dept.id} value={dept.id}>
-                    {dept.name} {dept.isAdmin && '(Administrador)'}
+                    {dept.name}
                   </option>
                 ))}
               </select>
-              {selectedDepartment && (
+            </div>
+
+            {/* Rol */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
+                <Shield className="h-4 w-4" />
+                Rol
+              </label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                disabled={isCurrentUser}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+              >
+                <option value="VIEWER">Lector (solo lectura)</option>
+                <option value="EDITOR">Editor (crea y edita sus datos)</option>
+                <option value="COORDINATOR">Coordinador (líder de área)</option>
+                <option value="ADMIN">Administrador (acceso total)</option>
+              </select>
+              {isCurrentUser && (
+                <p className="text-xs text-amber-500 mt-1">No puedes cambiar tu propio rol</p>
+              )}
+              {formData.role === 'ADMIN' && !isCurrentUser && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Acceso completo al sistema
+                </p>
+              )}
+              {formData.role === 'COORDINATOR' && (
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                  Ve y gestiona datos de su departamento
+                </p>
+              )}
+              {formData.role === 'VIEWER' && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {selectedDepartment.isAdmin
-                    ? '✓ Este departamento tiene permisos de administrador'
-                    : 'Este departamento tiene permisos de usuario'}
+                  Solo lectura, no puede crear ni editar
                 </p>
               )}
             </div>
+
+            {/* Permisos Especiales */}
+            {formData.role !== 'ADMIN' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
+                  <KeyRound className="h-4 w-4" />
+                  Permisos Especiales
+                </label>
+                <div className="space-y-2">
+                  {AVAILABLE_PERMISSIONS.map((perm) => (
+                    <label
+                      key={perm.key}
+                      className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.permissions.includes(perm.key)}
+                        onChange={() => togglePermission(perm.key)}
+                        className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {perm.label}
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {perm.description}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -203,18 +277,6 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Ubicación
-              </label>
-              <input
-                type="text"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>

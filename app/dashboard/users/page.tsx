@@ -27,7 +27,7 @@ export default async function UsersPage({
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true }
+    select: { id: true, name: true, email: true, role: true, permissions: true }
   })
 
   if (!user) {
@@ -45,7 +45,7 @@ export default async function UsersPage({
     whereClause.departmentId = searchParams.department
   }
 
-  const [users, adminCount, agentCount, customerCount, departments, openTicketsCount] = await Promise.all([
+  const [users, adminCount, coordinatorCount, editorCount, viewerCount, departments, openTicketsCount] = await Promise.all([
     prisma.user.findMany({
       where: whereClause,
       select: {
@@ -55,7 +55,7 @@ export default async function UsersPage({
         avatar: true,
         role: true,
         phone: true,
-        location: true,
+        permissions: true,
         createdAt: true,
         department: {
           select: {
@@ -76,8 +76,9 @@ export default async function UsersPage({
       }
     }),
     prisma.user.count({ where: { role: 'ADMIN' } }),
-    prisma.user.count({ where: { role: 'AGENT' } }),
-    prisma.user.count({ where: { role: 'CUSTOMER' } }),
+    prisma.user.count({ where: { role: 'COORDINATOR' } }),
+    prisma.user.count({ where: { role: 'EDITOR' } }),
+    prisma.user.count({ where: { role: 'VIEWER' } }),
     prisma.department.findMany({
       select: {
         id: true,
@@ -109,7 +110,7 @@ export default async function UsersPage({
               <CreateUserButton />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -125,8 +126,8 @@ export default async function UsersPage({
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Agentes</p>
-                    <p className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mt-2">{agentCount}</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Coordinadores</p>
+                    <p className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mt-2">{coordinatorCount}</p>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-lg">
                     <UserCog className="h-6 w-6 text-blue-600" />
@@ -137,11 +138,23 @@ export default async function UsersPage({
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Clientes</p>
-                    <p className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mt-2">{customerCount}</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Editores</p>
+                    <p className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mt-2">{editorCount}</p>
                   </div>
                   <div className="bg-green-100 p-3 rounded-lg">
                     <Users className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Lectores</p>
+                    <p className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mt-2">{viewerCount}</p>
+                  </div>
+                  <div className="bg-gray-100 p-3 rounded-lg">
+                    <Users className="h-6 w-6 text-gray-600" />
                   </div>
                 </div>
               </div>

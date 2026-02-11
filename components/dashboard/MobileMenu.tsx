@@ -32,14 +32,14 @@ interface MobileMenuProps {
 
 export default function MobileMenu({ isOpen, onClose, user, openTicketsCount }: MobileMenuProps) {
     const pathname = usePathname()
-    const userRole = user?.role || 'CUSTOMER'
+    const userRole = user?.role || 'EDITOR'
     const { theme, toggleTheme } = useTheme()
 
     const allNavigation = [
-        { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-        { name: 'Tickets', href: '/dashboard/tickets', icon: MessageSquare, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-        { name: 'Cronograma', href: '/dashboard/schedule', icon: Calendar, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-        { name: 'Categorías', href: '/dashboard/categories', icon: Tag, roles: ['AGENT', 'ADMIN'] },
+        { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'] },
+        { name: 'Tickets', href: '/dashboard/tickets', icon: MessageSquare, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'] },
+        { name: 'Cronograma', href: '/dashboard/schedule', icon: Calendar, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'] },
+        { name: 'Categorías', href: '/dashboard/categories', icon: Tag, roles: ['ADMIN', 'COORDINATOR'] },
         { name: 'Usuarios', href: '/dashboard/users', icon: Users, roles: ['ADMIN'] },
         { name: 'Configuración', href: '/dashboard/settings', icon: Settings, roles: ['ADMIN'] },
     ]

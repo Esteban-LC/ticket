@@ -32,7 +32,7 @@ export default async function ProfilePage() {
   }
 
   // Filtrar contador según el rol
-  const countWhere = user.role === 'CUSTOMER'
+  const countWhere = user.role !== 'ADMIN' && user.role !== 'COORDINATOR'
     ? { status: 'OPEN' as const, customerId: user.id }
     : { status: 'OPEN' as const }
   const openTicketsCount = await prisma.ticket.count({ where: countWhere })
@@ -64,11 +64,13 @@ export default async function ProfilePage() {
                     <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-white">{user.name}</h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
                     <span className={`mt-3 px-3 py-1 text-xs font-medium rounded-full ${user.role === 'ADMIN' ? 'bg-red-100 text-red-800' :
-                      user.role === 'AGENT' ? 'bg-blue-100 text-blue-800' :
-                        'bg-green-100 text-green-800'
+                      user.role === 'COORDINATOR' ? 'bg-blue-100 text-blue-800' :
+                      user.role === 'EDITOR' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
                       }`}>
                       {user.role === 'ADMIN' ? 'Administrador' :
-                        user.role === 'AGENT' ? 'Agente' : 'Cliente'}
+                        user.role === 'COORDINATOR' ? 'Coordinador' :
+                        user.role === 'EDITOR' ? 'Editor' : 'Visualizador'}
                     </span>
                     <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700 w-full">
                       <div className="space-y-3 text-sm">

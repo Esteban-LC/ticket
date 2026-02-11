@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         name,
         email,
         password: hashedPassword,
-        role: role || 'CUSTOMER',
+        role: role || 'EDITOR',
         phone,
         location,
       },
@@ -96,30 +96,29 @@ export async function PATCH(
     }
 
     const data = await request.json()
-    const { name, departmentId, phone, location, password } = data
+    const { name, departmentId, phone, password, permissions, role } = data
 
     const updateData: any = {
       name,
       phone,
-      location,
     }
 
-    // Handle department assignment and automatic role assignment
-    if (departmentId !== undefined) {
-      if (departmentId) {
-        // Fetch department to determine role
-        const department = await prisma.department.findUnique({
-          where: { id: departmentId },
-          select: { isAdmin: true }
-        })
+    // Actualizar permisos si se proporcionan
+    if (permissions !== undefined) {
+      updateData.permissions = Array.isArray(permissions) ? permissions : []
+    }
 
-        updateData.departmentId = departmentId
-        updateData.role = department?.isAdmin ? 'ADMIN' : 'CUSTOMER'
-      } else {
-        // Remove department
-        updateData.departmentId = null
-        updateData.role = 'CUSTOMER'
+    // Actualizar rol si se proporciona
+    if (role !== undefined) {
+      const validRoles = ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER']
+      if (validRoles.includes(role)) {
+        updateData.role = role
       }
+    }
+
+    // Handle department assignment
+    if (departmentId !== undefined) {
+      updateData.departmentId = departmentId || null
     }
 
     // If password is provided, hash it
@@ -142,7 +141,7 @@ export async function PATCH(
         email: true,
         role: true,
         phone: true,
-        location: true,
+        permissions: true,
         department: {
           select: {
             id: true,

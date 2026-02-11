@@ -76,8 +76,8 @@ export async function GET(
       )
     }
 
-    // Si es CUSTOMER, validar que solo pueda ver sus propios tickets
-    if (user.role === 'CUSTOMER' && ticket.customerId !== user.id) {
+    // EDITOR y VIEWER solo pueden ver sus propios tickets
+    if ((user.role === 'EDITOR' || user.role === 'VIEWER') && ticket.customerId !== user.id) {
       return NextResponse.json(
         { error: 'No autorizado' },
         { status: 403 }

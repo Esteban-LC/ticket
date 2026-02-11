@@ -19,14 +19,14 @@ export default async function ResultsPage() {
     // Obtener usuario completo
     const user = await prisma.user.findUnique({
         where: { email: session.user.email || '' },
-        select: { id: true, name: true, email: true, role: true }
+        select: { id: true, name: true, email: true, role: true, permissions: true }
     })
 
     if (!user) {
         redirect('/login')
     }
 
-    // Validar rol (solo ADMIN o AGENT, ajustar según necesidad)
+    // Todos los roles pueden acceder a resultados
     if (user.role !== 'ADMIN') {
         // redirect('/dashboard') // Descomentar para restringir acceso
     }

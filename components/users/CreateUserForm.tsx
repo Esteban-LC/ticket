@@ -2,14 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Lock, Shield, Phone, Building2, AlertCircle, Building } from 'lucide-react'
+import { User, Mail, Lock, Shield, Phone, Building2, AlertCircle, KeyRound } from 'lucide-react'
 import Link from 'next/link'
-
-interface Organization {
-  id: string
-  name: string
-  domain: string | null
-}
 
 interface Department {
   id: string
@@ -19,11 +13,14 @@ interface Department {
 }
 
 interface CreateUserFormProps {
-  organizations: Organization[]
   departments: Department[]
 }
 
-export default function CreateUserForm({ organizations, departments }: CreateUserFormProps) {
+const AVAILABLE_PERMISSIONS = [
+  { key: 'workspace:access', label: 'Workspace', description: 'Acceso al espacio de trabajo compartido para registrar' },
+]
+
+export default function CreateUserForm({ departments }: CreateUserFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -33,9 +30,18 @@ export default function CreateUserForm({ organizations, departments }: CreateUse
     password: '',
     phone: '',
     departmentId: '',
-    organizationId: '',
-    isManualAdmin: false,
+    role: 'EDITOR' as 'ADMIN' | 'COORDINATOR' | 'EDITOR' | 'VIEWER',
+    permissions: [] as string[],
   })
+
+  const togglePermission = (key: string) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(key)
+        ? prev.permissions.filter(p => p !== key)
+        : [...prev.permissions, key]
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,13 +147,13 @@ export default function CreateUserForm({ organizations, departments }: CreateUse
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="usuario@empresa.com"
+                placeholder="usuario@liceomichoacano.edu.mx"
                 className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
           </div>
 
-          {/* Seguridad y Acceso */}
+          {/* Contraseña y Departamento */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             {/* Contraseña */}
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
@@ -199,7 +205,7 @@ export default function CreateUserForm({ organizations, departments }: CreateUse
                 <option value="">Seleccionar departamento</option>
                 {departments.map((dept) => (
                   <option key={dept.id} value={dept.id}>
-                    {dept.name} {dept.isAdmin ? '(Administrador)' : ''}
+                    {dept.name}
                   </option>
                 ))}
               </select>
@@ -208,60 +214,65 @@ export default function CreateUserForm({ organizations, departments }: CreateUse
                   {departments.find(d => d.id === formData.departmentId)?.description}
                 </p>
               )}
-
-              {/* Checkbox para administrador manual */}
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isManualAdmin}
-                    onChange={(e) => setFormData({ ...formData, isManualAdmin: e.target.checked })}
-                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      Otorgar permisos de administrador
-                    </span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Permite acceso administrativo independientemente del departamento
-                    </p>
-                  </div>
-                </label>
-              </div>
             </div>
           </div>
 
-          {/* Organización */}
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-lg">
-                <Building className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+          {/* Rol y Teléfono */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+            {/* Rol */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                  <Shield className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                    Rol <span className="text-red-500">*</span>
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Nivel de acceso del usuario
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                  Organización
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Asignar a una unidad organizativa
-                </p>
+              <select
+                required
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="VIEWER">Lector (solo lectura)</option>
+                <option value="EDITOR">Editor (crea y edita sus datos)</option>
+                <option value="COORDINATOR">Coordinador (líder de área)</option>
+                <option value="ADMIN">Administrador (acceso total)</option>
+              </select>
+              <div className="mt-3">
+                {formData.role === 'ADMIN' && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    Acceso completo: Vista General, gestión de usuarios y configuración
+                  </p>
+                )}
+                {formData.role === 'COORDINATOR' && (
+                  <p className="text-xs text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    Ve y gestiona datos de su departamento
+                  </p>
+                )}
+                {formData.role === 'EDITOR' && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    Crea y edita sus propios datos
+                  </p>
+                )}
+                {formData.role === 'VIEWER' && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    Solo puede ver sus datos, sin crear ni editar
+                  </p>
+                )}
               </div>
             </div>
-            <select
-              value={formData.organizationId}
-              onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })}
-              className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Sin organización</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name} {org.domain ? `(@${org.domain})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
 
-          {/* Información de Contacto */}
-          <div>
             {/* Teléfono */}
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
               <div className="flex items-start gap-3 mb-4">
@@ -286,6 +297,53 @@ export default function CreateUserForm({ organizations, departments }: CreateUse
               />
             </div>
           </div>
+
+          {/* Permisos Especiales - para roles no ADMIN */}
+          {formData.role !== 'ADMIN' && (
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                  <KeyRound className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                    Permisos Especiales
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Otorga accesos adicionales a secciones específicas del sistema
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {AVAILABLE_PERMISSIONS.map((perm) => (
+                  <label
+                    key={perm.key}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.permissions.includes(perm.key)}
+                      onChange={() => togglePermission(perm.key)}
+                      className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {perm.label}
+                      </span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {perm.description}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              {formData.permissions.length === 0 && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 italic">
+                  Sin permisos adicionales. El usuario solo tendrá acceso a sus vistas personales.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
