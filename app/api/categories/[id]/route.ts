@@ -54,8 +54,8 @@ export async function PUT(
       select: { role: true }
     })
 
-    // Solo AGENT y ADMIN pueden actualizar categorías
-    if (user?.role === 'CUSTOMER') {
+    // Solo ADMIN puede actualizar categorías
+    if (user?.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Acceso denegado' },
         { status: 403 }
@@ -108,8 +108,8 @@ export async function DELETE(
       select: { role: true }
     })
 
-    // Solo AGENT y ADMIN pueden eliminar categorías
-    if (user?.role === 'CUSTOMER') {
+    // Solo ADMIN puede eliminar categorías
+    if (user?.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Acceso denegado' },
         { status: 403 }

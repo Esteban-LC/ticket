@@ -31,7 +31,7 @@ export default async function TicketsPage({
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true }
+    select: { id: true, name: true, email: true, role: true, permissions: true }
   })
 
   if (!user) {
@@ -44,10 +44,13 @@ export default async function TicketsPage({
 
   const whereClause: any = {}
 
-  // Si es CUSTOMER, solo puede ver sus propios tickets
-  if (user.role === 'CUSTOMER') {
+  // Filtrar tickets según rol
+  if (user.role === 'COORDINATOR') {
+    whereClause.customer = { departmentId: (await prisma.user.findUnique({ where: { id: user.id }, select: { departmentId: true } }))?.departmentId }
+  } else if (user.role === 'EDITOR' || user.role === 'VIEWER') {
     whereClause.customerId = user.id
   }
+  // ADMIN ve todos
 
   if (searchParams.status) {
     whereClause.status = searchParams.status
@@ -113,7 +116,7 @@ export default async function TicketsPage({
     prisma.user.findMany({
       where: {
         role: {
-          in: ['AGENT', 'ADMIN']
+          in: ['ADMIN', 'COORDINATOR']
         }
       },
       select: {
@@ -124,8 +127,10 @@ export default async function TicketsPage({
     }),
     // Filtrar contador según el rol
     prisma.ticket.count({
-      where: user.role === 'CUSTOMER'
+      where: user.role === 'EDITOR' || user.role === 'VIEWER'
         ? { status: 'OPEN', customerId: user.id }
+        : user.role === 'COORDINATOR'
+        ? { status: 'OPEN', assigneeId: user.id }
         : { status: 'OPEN' }
     })
   ])

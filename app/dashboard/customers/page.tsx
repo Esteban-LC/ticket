@@ -34,7 +34,7 @@ export default async function CustomersPage() {
   const [customers, statsArray] = await Promise.all([
     prisma.user.findMany({
       where: {
-        role: 'CUSTOMER'
+        role: 'VIEWER'
       },
       select: {
         id: true,
@@ -68,9 +68,9 @@ export default async function CustomersPage() {
       }
     }),
     prisma.$transaction([
-      prisma.user.count({ where: { role: 'CUSTOMER' } }),
-      prisma.ticket.count({ where: { customer: { role: 'CUSTOMER' }, status: 'OPEN' } }),
-      prisma.ticket.count({ where: { customer: { role: 'CUSTOMER' } } }),
+      prisma.user.count({ where: { role: 'VIEWER' } }),
+      prisma.ticket.count({ where: { customer: { role: 'VIEWER' }, status: 'OPEN' } }),
+      prisma.ticket.count({ where: { customer: { role: 'VIEWER' } } }),
       prisma.ticket.count({ where: { status: 'OPEN' } })
     ])
   ])

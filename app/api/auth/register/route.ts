@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     // Verificar si es el primer usuario (será admin)
     const userCount = await prisma.user.count()
-    const role = userCount === 0 ? 'ADMIN' : 'CUSTOMER'
+    const role = userCount === 0 ? 'ADMIN' : 'EDITOR'
 
     // Create user
     const user = await prisma.user.create({

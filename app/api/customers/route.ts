@@ -21,8 +21,8 @@ export async function POST(request: Request) {
       select: { role: true }
     })
 
-    // Solo AGENT y ADMIN pueden crear customers
-    if (user?.role === 'CUSTOMER') {
+    // Solo ADMIN pueden crear customers
+    if (user?.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Acceso denegado' },
         { status: 403 }
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         name,
         email,
         password: hashedPassword,
-        role: 'CUSTOMER',
+        role: 'VIEWER',
         phone,
         location,
         address,
@@ -100,8 +100,8 @@ export async function GET(request: Request) {
       select: { role: true }
     })
 
-    // Solo AGENT y ADMIN pueden ver customers
-    if (user?.role === 'CUSTOMER') {
+    // Solo ADMIN pueden ver customers
+    if (user?.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Acceso denegado' },
         { status: 403 }
@@ -110,7 +110,7 @@ export async function GET(request: Request) {
 
     const customers = await prisma.user.findMany({
       where: {
-        role: 'CUSTOMER'
+        role: 'VIEWER'
       },
       select: {
         id: true,

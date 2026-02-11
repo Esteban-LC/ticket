@@ -16,7 +16,7 @@ export default async function ReportsPage() {
     // Obtener usuario completo con su rol
     const user = await prisma.user.findUnique({
         where: { email: session.user.email || '' },
-        select: { id: true, name: true, email: true, role: true }
+        select: { id: true, name: true, email: true, role: true, permissions: true }
     })
 
     if (!user) {
@@ -25,7 +25,7 @@ export default async function ReportsPage() {
 
     // Obtener conteo de tickets abiertos para el sidebar
     const openTicketsCount = await prisma.ticket.count({
-        where: user.role === 'CUSTOMER'
+        where: (user.role === 'EDITOR' || user.role === 'VIEWER')
             ? { status: 'OPEN', customerId: user.id }
             : { status: 'OPEN' }
     })

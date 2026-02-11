@@ -10,7 +10,7 @@ export default async function PublicTicketPage({
   const customer = await prisma.user.findUnique({
     where: {
       publicToken: params.token,
-      role: 'CUSTOMER'
+      role: 'VIEWER'
     },
     select: {
       id: true,

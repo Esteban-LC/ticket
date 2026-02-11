@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { listWorkspaceUsers, createWorkspaceUser } from '@/lib/google-admin'
+import { logAdminAction } from '@/lib/admin-log'
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,6 +57,15 @@ export async function POST(request: NextRequest) {
       password,
       orgUnitPath,
       changePasswordAtNextLogin,
+    })
+
+    await logAdminAction({
+      action: 'CREATE_USER',
+      adminId: session.user.id,
+      adminEmail: session.user.email!,
+      targetEmail: primaryEmail,
+      targetName: `${givenName} ${familyName}`,
+      details: { orgUnitPath, changePasswordAtNextLogin },
     })
 
     return NextResponse.json(user, { status: 201 })

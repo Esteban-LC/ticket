@@ -21,11 +21,11 @@ export async function POST(request: Request) {
     // Get users for creating tickets
     const [customers, agents] = await Promise.all([
       prisma.user.findMany({
-        where: { role: 'CUSTOMER' },
+        where: { role: { in: ['EDITOR', 'VIEWER'] } },
         select: { id: true }
       }),
       prisma.user.findMany({
-        where: { role: { in: ['AGENT', 'ADMIN'] } },
+        where: { role: { in: ['COORDINATOR', 'ADMIN'] } },
         select: { id: true }
       })
     ])

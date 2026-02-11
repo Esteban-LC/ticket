@@ -63,13 +63,23 @@ export default function LoginPage() {
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-950'}`} style={theme}>
-      {/* Toggle Dark Mode Button */}
+      {/* Toggle Dark Mode Switch */}
       <button
         onClick={toggleDarkMode}
-        className="fixed top-4 right-4 z-50 p-3 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-all"
+        className={`fixed top-4 right-4 z-50 inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none shadow-lg ${darkMode ? 'bg-blue-600' : 'bg-gray-300'}`}
+        role="switch"
+        aria-checked={darkMode}
         aria-label="Toggle dark mode"
       >
-        {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        <span
+          className={`inline-flex h-5 w-5 items-center justify-center transform rounded-full bg-white transition-transform shadow ${darkMode ? 'translate-x-6' : 'translate-x-1'}`}
+        >
+          {darkMode ? (
+            <Moon className="h-3 w-3 text-blue-600" />
+          ) : (
+            <Sun className="h-3 w-3 text-amber-500" />
+          )}
+        </span>
       </button>
 
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-2">

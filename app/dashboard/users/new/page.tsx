@@ -16,7 +16,7 @@ export default async function NewUserPage() {
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true }
+    select: { id: true, name: true, email: true, role: true, permissions: true }
   })
 
   if (!user) {
@@ -30,18 +30,6 @@ export default async function NewUserPage() {
 
   // ADMIN ve todos los tickets
   const openTicketsCount = await prisma.ticket.count({ where: { status: 'OPEN' } })
-
-  // Obtener todas las organizaciones disponibles
-  const organizations = await prisma.organization.findMany({
-    select: {
-      id: true,
-      name: true,
-      domain: true,
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  })
 
   // Obtener todos los departamentos disponibles
   const departments = await prisma.department.findMany({
@@ -64,7 +52,7 @@ export default async function NewUserPage() {
         <MobileHeader title="Nuevo Usuario" />
 
         <main className="flex-1 overflow-y-auto">
-          <CreateUserForm organizations={organizations} departments={departments} />
+          <CreateUserForm departments={departments} />
         </main>
       </div>
     </div>

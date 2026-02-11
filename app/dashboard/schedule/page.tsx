@@ -14,7 +14,7 @@ export default async function SchedulePage() {
     // Obtener usuario completo con su rol
     const user = await prisma.user.findUnique({
         where: { email: session.user.email || '' },
-        select: { id: true, name: true, email: true, role: true }
+        select: { id: true, name: true, email: true, role: true, permissions: true }
     })
 
     if (!user) {

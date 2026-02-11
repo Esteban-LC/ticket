@@ -2,25 +2,84 @@ import { google } from 'googleapis'
 import path from 'path'
 import fs from 'fs'
 
-function getCredentials() {
-  // Opción 1: JSON completo directo en variable de entorno (para Vercel/producción)
-  if (process.env.GOOGLE_CREDENTIALS_JSON) {
-    return JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+function findCredentialsFile(): string | null {
+  // Buscar archivos de credenciales JSON en la raíz del proyecto
+  const cwd = process.cwd()
+  const candidates = [
+    process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    path.join(cwd, 'google-credentials.json'),
+    path.join(cwd, 'gmail-correo-447916-88771ea8dd50.json'),
+  ].filter(Boolean) as string[]
+
+  // También buscar cualquier archivo que coincida con patrones comunes de service account
+  try {
+    const files = fs.readdirSync(cwd)
+    for (const file of files) {
+      if (file.endsWith('.json') && (file.includes('credentials') || file.includes('service-account') || file.includes('gmail-correo'))) {
+        const fullPath = path.join(cwd, file)
+        if (!candidates.includes(fullPath)) {
+          candidates.push(fullPath)
+        }
+      }
+    }
+  } catch {
+    // Ignorar errores al listar directorio
   }
 
-  // Opción 2: Archivo JSON local (para desarrollo local)
-  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
-    || path.join(process.cwd(), 'google-credentials.json')
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) {
+      return filePath
+    }
+  }
+  return null
+}
 
-  if (fs.existsSync(credentialsPath)) {
-    return JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'))
+function normalizePrivateKey(key: string): string {
+  let normalized = key
+    .replace(/\\\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .trim()
+
+  if (!normalized.includes('-----BEGIN')) {
+    throw new Error('GOOGLE_PRIVATE_KEY no contiene un header PEM válido (-----BEGIN PRIVATE KEY-----)')
+  }
+
+  return normalized
+}
+
+function getCredentials() {
+  // Opción 1 (PRIORITARIA): Archivo JSON local — no tiene problemas de escape
+  const credentialsFile = findCredentialsFile()
+  if (credentialsFile) {
+    console.log('[Google Admin] Usando credenciales desde archivo:', credentialsFile)
+    return JSON.parse(fs.readFileSync(credentialsFile, 'utf-8'))
+  }
+
+  // Opción 2: Variables individuales (para Vercel/deployments)
+  if (process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+    console.log('[Google Admin] Usando credenciales desde variables de entorno individuales')
+    const privateKey = normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY)
+    return {
+      type: 'service_account',
+      project_id: process.env.GOOGLE_PROJECT_ID || '',
+      private_key: privateKey,
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      token_uri: 'https://oauth2.googleapis.com/token',
+    }
+  }
+
+  // Opción 3: JSON completo en variable de entorno
+  if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    console.log('[Google Admin] Usando credenciales desde GOOGLE_CREDENTIALS_JSON')
+    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+    if (credentials.private_key) {
+      credentials.private_key = normalizePrivateKey(credentials.private_key)
+    }
+    return credentials
   }
 
   throw new Error(
-    'No se encontraron credenciales de Google. Configura una de estas opciones:\n' +
-    '1. GOOGLE_CREDENTIALS_JSON en .env (pega todo el JSON como string)\n' +
-    '2. Archivo google-credentials.json en la raíz del proyecto\n' +
-    '3. GOOGLE_APPLICATION_CREDENTIALS con la ruta al archivo JSON'
+    'No se encontraron credenciales de Google. Coloca el archivo JSON de service account en la raíz del proyecto, o configura GOOGLE_PRIVATE_KEY y GOOGLE_SERVICE_ACCOUNT_EMAIL en tu .env'
   )
 }
 
@@ -67,9 +126,19 @@ export async function listWorkspaceUsers(params?: {
   const directory = getAdminDirectory()
   const customer = process.env.GOOGLE_CUSTOMER_ID || 'my_customer'
 
+  // Construir el query combinando búsqueda de texto y orgUnitPath
+  const queryParts: string[] = []
+  if (params?.query) {
+    queryParts.push(params.query)
+  }
+  if (params?.orgUnitPath) {
+    queryParts.push(`orgUnitPath='${params.orgUnitPath}'`)
+  }
+  const query = queryParts.length > 0 ? queryParts.join(' ') : undefined
+
   const response = await directory.users.list({
     customer,
-    query: params?.query || undefined,
+    query,
     maxResults: params?.maxResults || 100,
     pageToken: params?.pageToken || undefined,
     orderBy: 'familyName',

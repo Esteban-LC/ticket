@@ -25,7 +25,7 @@ export async function POST(
     const customer = await prisma.user.update({
       where: { 
         id: params.id,
-        role: 'CUSTOMER'
+        role: 'VIEWER'
       },
       data: {
         publicToken: token
@@ -66,7 +66,7 @@ export async function GET(
     const customer = await prisma.user.findUnique({
       where: { 
         id: params.id,
-        role: 'CUSTOMER'
+        role: 'VIEWER'
       },
       select: {
         id: true,

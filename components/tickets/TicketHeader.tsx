@@ -42,7 +42,7 @@ export default function TicketHeader({ ticket }: TicketHeaderProps) {
 
   useEffect(() => {
     // Fetch agents for assignment
-    fetch('/api/users?role=AGENT,ADMIN')
+    fetch('/api/users?role=COORDINATOR,ADMIN')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {

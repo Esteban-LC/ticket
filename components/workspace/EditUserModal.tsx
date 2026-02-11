@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { X, Save, Eye, EyeOff, Loader2, UserCog } from 'lucide-react'
+import OrgUnitCombobox from './OrgUnitCombobox'
 
 interface WorkspaceUser {
   id: string
@@ -136,23 +137,11 @@ export default function EditUserModal({ user, orgUnits, onClose, onUpdated }: Ed
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Unidad Organizativa
-            </label>
-            <select
-              value={form.orgUnitPath}
-              onChange={(e) => setForm({ ...form, orgUnitPath: e.target.value })}
-              className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="/">/ (Raíz)</option>
-              {orgUnits.map((ou) => (
-                <option key={ou.orgUnitId} value={ou.orgUnitPath}>
-                  {ou.orgUnitPath}
-                </option>
-              ))}
-            </select>
-          </div>
+          <OrgUnitCombobox
+            orgUnits={orgUnits}
+            value={form.orgUnitPath}
+            onChange={(path) => setForm({ ...form, orgUnitPath: path })}
+          />
 
           <div className="border-t dark:border-slate-700 pt-4">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">

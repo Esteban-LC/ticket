@@ -40,3 +40,4 @@ prisma/migrations
 google-credentials.json
 *-credentials.json
 *-service-account.json
+gmail-correo-*.json

@@ -9,12 +9,15 @@ import {
   Search,
   UserPlus,
   AlertCircle,
+  History,
+  ArrowLeft,
 } from 'lucide-react'
 import OrgUnitTree from './OrgUnitTree'
 import WorkspaceUserList from './WorkspaceUserList'
 import CreateUserModal from './CreateUserModal'
 import EditUserModal from './EditUserModal'
 import ConfirmModal from './ConfirmModal'
+import AdminHistory from './AdminHistory'
 
 interface WorkspaceUser {
   id: string
@@ -43,7 +46,7 @@ export default function WorkspaceClient() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedOrgUnit, setSelectedOrgUnit] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'users' | 'orgunits'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'orgunits' | 'history'>('users')
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -154,7 +157,8 @@ export default function WorkspaceClient() {
   }
 
   const handleSelectOrgUnit = (path: string | null) => {
-    setSelectedOrgUnit(path)
+    // "/" = raíz = mostrar todos (sin filtro)
+    setSelectedOrgUnit(path === '/' ? null : path)
     setActiveTab('users')
   }
 
@@ -209,7 +213,7 @@ export default function WorkspaceClient() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8">
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -260,10 +264,10 @@ export default function WorkspaceClient() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-slate-800 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-slate-800 rounded-lg p-1 w-full sm:w-fit overflow-x-auto">
         <button
           onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition ${
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
             activeTab === 'users'
               ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -274,20 +278,44 @@ export default function WorkspaceClient() {
         </button>
         <button
           onClick={() => setActiveTab('orgunits')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition ${
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
             activeTab === 'orgunits'
               ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <FolderTree className="h-4 w-4" />
-          Unidades Organizativas
+          <span className="hidden sm:inline">Unidades Organizativas</span>
+          <span className="sm:hidden">UOs</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+            activeTab === 'history'
+              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <History className="h-4 w-4" />
+          Historial
         </button>
       </div>
 
       {/* Content */}
       {activeTab === 'users' && (
         <div>
+          {/* Botón regresar a OUs */}
+          {selectedOrgUnit && (
+            <button
+              onClick={() => setActiveTab('orgunits')}
+              className="flex items-center gap-1.5 mb-3 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Volver a Unidades Organizativas</span>
+              <span className="sm:hidden">Volver a UOs</span>
+            </button>
+          )}
+
           {/* Search & Filters */}
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <form onSubmit={handleSearch} className="flex-1 flex gap-2">
@@ -311,11 +339,11 @@ export default function WorkspaceClient() {
             {selectedOrgUnit && (
               <button
                 onClick={() => { setSelectedOrgUnit(null); }}
-                className="px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition flex items-center gap-1"
+                className="px-3 py-2 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition flex items-center gap-1 max-w-full"
               >
-                <FolderTree className="h-3 w-3" />
-                {selectedOrgUnit}
-                <span className="ml-1">&times;</span>
+                <FolderTree className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{selectedOrgUnit}</span>
+                <span className="ml-1 flex-shrink-0">&times;</span>
               </button>
             )}
           </div>
@@ -337,10 +365,13 @@ export default function WorkspaceClient() {
         />
       )}
 
+      {activeTab === 'history' && <AdminHistory />}
+
       {/* Modals */}
       {showCreateModal && (
         <CreateUserModal
           orgUnits={orgUnits}
+          defaultOrgUnitPath={selectedOrgUnit}
           onClose={() => setShowCreateModal(false)}
           onCreated={handleUserCreated}
         />

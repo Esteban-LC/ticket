@@ -216,36 +216,36 @@ export default function WorkspaceUserList({
       <div className="lg:hidden divide-y dark:divide-slate-700">
         {users.map((user) => (
           <div key={user.id || user.primaryEmail} className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <UserAvatar user={user} />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-gray-900 dark:text-white text-sm">
+            <div className="flex items-center gap-3">
+              <UserAvatar user={user} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white text-sm truncate">
                       {user.name.fullName}
                     </p>
-                    {user.isAdmin && <Shield className="h-3 w-3 text-amber-500" />}
+                    {user.isAdmin && <Shield className="h-3 w-3 text-amber-500 flex-shrink-0" />}
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{user.primaryEmail}</p>
+                  {user.suspended ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 flex-shrink-0">
+                      Suspendido
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 flex-shrink-0">
+                      Activo
+                    </span>
+                  )}
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{user.primaryEmail}</p>
               </div>
-              {user.suspended ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                  Suspendido
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                  Activo
-                </span>
-              )}
             </div>
 
-            <div className="mt-3 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-              <span className="flex items-center gap-1">
-                <FolderTree className="h-3 w-3" />
-                {user.orgUnitPath || '/'}
+            <div className="mt-2.5 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+              <span className="flex items-center gap-1 truncate">
+                <FolderTree className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{user.orgUnitPath || '/'}</span>
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 flex-shrink-0">
                 <Clock className="h-3 w-3" />
                 {formatDate(user.lastLoginTime)}
               </span>

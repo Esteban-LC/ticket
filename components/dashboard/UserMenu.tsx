@@ -48,8 +48,12 @@ export default function UserMenu({ user, onLinkClick }: UserMenuProps) {
         switch (user?.role) {
             case 'ADMIN':
                 return 'Administrador'
-            case 'AGENT':
-                return 'Técnico'
+            case 'COORDINATOR':
+                return 'Coordinador'
+            case 'EDITOR':
+                return 'Editor'
+            case 'VIEWER':
+                return 'Visualizador'
             default:
                 return 'Usuario'
         }

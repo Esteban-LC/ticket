@@ -23,19 +23,19 @@ export default async function CategoriesPage() {
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true }
+    select: { id: true, name: true, email: true, role: true, permissions: true }
   })
 
   if (!user) {
     redirect('/login')
   }
 
-  // Validar que CUSTOMER no pueda acceder a esta página
-  if (user.role === 'CUSTOMER') {
+  // Validar que VIEWER y EDITOR no puedan acceder a esta página
+  if (user.role === 'VIEWER' || user.role === 'EDITOR') {
     redirect('/dashboard')
   }
 
-  // AGENT y ADMIN ven todos los tickets
+  // COORDINATOR y ADMIN ven todos los tickets
   const openTicketsCount = await prisma.ticket.count({ where: { status: 'OPEN' } })
 
   return (

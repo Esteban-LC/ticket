@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { name, email, password, phone, departmentId, organizationId, isManualAdmin } = await request.json()
+    const { name, email, password, phone, departmentId, role, permissions } = await request.json()
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -119,23 +119,9 @@ export async function POST(request: Request) {
       )
     }
 
-    // Determinar rol basado en departamento o administrador manual
-    let role: 'ADMIN' | 'CUSTOMER' = 'CUSTOMER' // Rol por defecto
-
-    if (isManualAdmin) {
-      // Si se marca como administrador manual, siempre es ADMIN
-      role = 'ADMIN'
-    } else if (departmentId) {
-      // Si tiene departamento, verificar si el departamento es admin
-      const department = await prisma.department.findUnique({
-        where: { id: departmentId },
-        select: { isAdmin: true }
-      })
-
-      if (department?.isAdmin) {
-        role = 'ADMIN'
-      }
-    }
+    // Validar rol
+    const validRoles = ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER']
+    const userRole = validRoles.includes(role) ? role : 'EDITOR'
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
@@ -146,10 +132,10 @@ export async function POST(request: Request) {
         name,
         email,
         password: hashedPassword,
-        role,
+        role: userRole,
         phone,
         departmentId: departmentId || null,
-        organizationId: organizationId || null,
+        permissions: Array.isArray(permissions) ? permissions : [],
       },
       select: {
         id: true,

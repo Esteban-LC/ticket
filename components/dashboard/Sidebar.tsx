@@ -14,6 +14,7 @@ import {
   FileText,
   Layout,
   Building2,
+  Eye,
 } from 'lucide-react'
 import { useSidebar } from '@/contexts/SidebarContext'
 import UserMenu from './UserMenu'
@@ -24,31 +25,45 @@ interface SidebarProps {
     name?: string | null
     email?: string
     role?: string
+    permissions?: string[]
   }
   openTicketsCount?: number
 }
 
 export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
   const pathname = usePathname()
-  const userRole = user?.role || 'CUSTOMER'
+  const userRole = user?.role || 'EDITOR'
+  const userPermissions = user?.permissions || []
   const { isOpen, close } = useSidebar()
 
   // Definir navegación según el rol
   const allNavigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-    { name: 'Tickets', href: '/dashboard/tickets', icon: MessageSquare, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-    { name: 'Reportes', href: '/dashboard/reportes', icon: FileText, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-    { name: 'Cronograma', href: '/dashboard/schedule', icon: Calendar, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-    { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar, roles: ['CUSTOMER', 'AGENT', 'ADMIN'] },
-    { name: 'Resultados', href: '/dashboard/resultados', icon: Layout, roles: ['ADMIN'] },
-    { name: 'Categorías', href: '/dashboard/categories', icon: Tag, roles: ['AGENT', 'ADMIN'] },
-    { name: 'Usuarios', href: '/dashboard/users', icon: Users, roles: ['ADMIN'] },
-    { name: 'Workspace', href: '/dashboard/workspace', icon: Building2, roles: ['ADMIN'] },
-    { name: 'Configuración', href: '/dashboard/settings', icon: Settings, roles: ['ADMIN'] },
+    // === Sección personal (todos los roles) ===
+    { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal' },
+    { name: 'Tickets', href: '/dashboard/tickets', icon: MessageSquare, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal' },
+    { name: 'Reportes', href: '/dashboard/reportes', icon: FileText, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal' },
+    { name: 'Cronograma', href: '/dashboard/schedule', icon: Calendar, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal' },
+    { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal' },
+    { name: 'Resultados', href: '/dashboard/resultados', icon: Layout, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal' },
+    // === Sección administración (solo ADMIN) ===
+    { name: 'Vista General', href: '/dashboard/vista-general', icon: Eye, roles: ['ADMIN'], section: 'admin' },
+    { name: 'Categorías', href: '/dashboard/categories', icon: Tag, roles: ['ADMIN'], section: 'admin' },
+    { name: 'Usuarios', href: '/dashboard/users', icon: Users, roles: ['ADMIN'], section: 'admin' },
+    { name: 'Workspace', href: '/dashboard/workspace', icon: Building2, roles: ['ADMIN'], section: 'admin', permission: 'workspace:access' },
+    { name: 'Configuración', href: '/dashboard/settings', icon: Settings, roles: ['ADMIN'], section: 'admin' },
   ]
 
-  // Filtrar navegación por rol
-  const navigation = allNavigation.filter(item => item.roles.includes(userRole))
+  // Filtrar navegación por rol y permisos
+  const navigation = allNavigation.filter(item => {
+    // Verificar rol
+    const hasRole = item.roles.includes(userRole)
+    // Si requiere permiso especial, verificar que lo tenga (o sea ADMIN)
+    const hasPermission = !item.permission || userRole === 'ADMIN' || userPermissions.includes(item.permission)
+    return hasRole && hasPermission
+  })
+
+  const personalNav = navigation.filter(item => item.section === 'personal')
+  const adminNav = navigation.filter(item => item.section === 'admin')
 
   return (
     <>
@@ -87,7 +102,8 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navigation.map((item) => {
+          {/* Sección personal */}
+          {personalNav.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
             const isTickets = item.href === '/dashboard/tickets'
@@ -96,7 +112,7 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
               <Link
                 key={item.name}
                 href={item.href}
-                onClick={close} // Cerrar sidebar al hacer clic en un enlace
+                onClick={close}
                 className={`flex items-center justify-between px-4 py-3 rounded-lg transition ${isActive
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
@@ -114,6 +130,38 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
               </Link>
             )
           })}
+
+          {/* Sección administración */}
+          {adminNav.length > 0 && (
+            <>
+              <div className="pt-4 pb-2 px-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  Administración
+                </p>
+              </div>
+              {adminNav.map((item) => {
+                const Icon = item.icon
+                const isActive = pathname === item.href
+
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={close}
+                    className={`flex items-center justify-between px-4 py-3 rounded-lg transition ${isActive
+                      ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                      }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Icon className="h-5 w-5" />
+                      <span className="font-medium">{item.name}</span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </>
+          )}
         </nav>
 
         {/* User Menu at Bottom */}

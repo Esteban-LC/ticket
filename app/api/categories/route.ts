@@ -43,8 +43,8 @@ export async function POST(request: Request) {
       select: { role: true }
     })
 
-    // Solo AGENT y ADMIN pueden crear categorías
-    if (user?.role === 'CUSTOMER') {
+    // Solo ADMIN puede crear categorías
+    if (user?.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Acceso denegado' },
         { status: 403 }
