@@ -12,9 +12,13 @@ export default async function DashboardPage() {
     select: { id: true, name: true, email: true, role: true, permissions: true }
   })
 
+  if (!user) {
+    return null
+  }
+
   // Filtrar tickets según el rol
-  const ticketWhere = user?.role !== 'ADMIN' && user?.role !== 'COORDINATOR'
-    ? { status: 'OPEN' as const, customerId: user!.id }
+  const ticketWhere = user.role !== 'ADMIN' && user.role !== 'COORDINATOR'
+    ? { status: 'OPEN' as const, customerId: user.id }
     : { status: 'OPEN' as const }
 
   const tickets = await prisma.ticket.findMany({
@@ -48,7 +52,7 @@ export default async function DashboardPage() {
   })
 
   // Filtrar estadísticas según el rol
-  const statsWhere = user?.role !== 'ADMIN' && user?.role !== 'COORDINATOR' ? { customerId: user!.id } : {}
+  const statsWhere = user.role !== 'ADMIN' && user.role !== 'COORDINATOR' ? { customerId: user.id } : {}
 
   const stats = await prisma.$transaction([
     prisma.ticket.count({ where: { ...statsWhere, status: 'OPEN' } }),
@@ -56,10 +60,6 @@ export default async function DashboardPage() {
     prisma.ticket.count({ where: { ...statsWhere, status: 'SOLVED' } }),
     prisma.ticket.count({ where: statsWhere }),
   ])
-
-  if (!user) {
-    return null
-  }
 
   return (
     <DashboardClient

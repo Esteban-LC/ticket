@@ -2,7 +2,13 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import ResultsClient from '@/components/dashboard/ResultsClient'
+import dynamic from 'next/dynamic'
+import { PageSkeleton } from '@/components/ui/Loading'
+
+const ResultsClient = dynamic(() => import('@/components/dashboard/ResultsClient'), {
+    ssr: false,
+    loading: () => <PageSkeleton />
+})
 
 export const metadata = {
     title: 'Resultados Semestrales | Tickets LICEO MICHOACANO',

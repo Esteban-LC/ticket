@@ -4,7 +4,25 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
-import ReportsClient from '@/components/dashboard/ReportsClient'
+import dynamic from 'next/dynamic'
+import { CardSkeleton } from '@/components/ui/Loading'
+
+const ReportsClient = dynamic(() => import('@/components/dashboard/ReportsClient'), {
+    ssr: false,
+    loading: () => (
+        <div className="p-4 lg:p-8 space-y-6">
+            <div className="animate-pulse">
+                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-2"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-64 mb-8"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[...Array(6)].map((_, i) => (
+                    <CardSkeleton key={i} />
+                ))}
+            </div>
+        </div>
+    )
+})
 
 export default async function ReportsPage() {
     const session = await getServerSession(authOptions)

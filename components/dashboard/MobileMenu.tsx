@@ -133,7 +133,7 @@ export default function MobileMenu({ isOpen, onClose, user, openTicketsCount }: 
                         </Link>
 
                         <button
-                            onClick={() => signOut()}
+                            onClick={() => signOut({ callbackUrl: window.location.origin })}
                             className="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition w-full"
                         >
                             <LogOut className="h-5 w-5" />
