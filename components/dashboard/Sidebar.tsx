@@ -15,6 +15,9 @@ import {
   Layout,
   Building2,
   Eye,
+  GraduationCap,
+  BookOpen,
+  ShoppingCart,
 } from 'lucide-react'
 import { useSidebar } from '@/contexts/SidebarContext'
 import UserMenu from './UserMenu'
@@ -51,6 +54,8 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
     { name: 'Usuarios', href: '/dashboard/users', icon: Users, roles: ['ADMIN'], section: 'admin' },
     { name: 'Workspace', href: '/dashboard/workspace', icon: Building2, roles: ['ADMIN'], section: 'admin', permission: 'workspace:access' },
     { name: 'Configuración', href: '/dashboard/settings', icon: Settings, roles: ['ADMIN'], section: 'admin' },
+    // === Sección WordPress LMS ===
+    { name: 'Usuarios WP', href: '/dashboard/wordpress/students', icon: Users, roles: ['ADMIN'], section: 'wordpress', permission: 'wordpress:access' },
   ]
 
   // Filtrar navegación por rol y permisos
@@ -64,6 +69,7 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
 
   const personalNav = navigation.filter(item => item.section === 'personal')
   const adminNav = navigation.filter(item => item.section === 'admin')
+  const wordpressNav = navigation.filter(item => item.section === 'wordpress')
 
   return (
     <>
@@ -140,6 +146,38 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
                 </p>
               </div>
               {adminNav.map((item) => {
+                const Icon = item.icon
+                const isActive = pathname === item.href
+
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={close}
+                    className={`flex items-center justify-between px-4 py-3 rounded-lg transition ${isActive
+                      ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                      }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Icon className="h-5 w-5" />
+                      <span className="font-medium">{item.name}</span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </>
+          )}
+
+          {/* Sección WordPress LMS */}
+          {wordpressNav.length > 0 && (
+            <>
+              <div className="pt-4 pb-2 px-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  WordPress LMS
+                </p>
+              </div>
+              {wordpressNav.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
 

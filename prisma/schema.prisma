@@ -277,3 +277,20 @@ enum AdminAction {
   SUSPEND_USER
   UNSUSPEND_USER
 }
+
+model WordPressUser {
+  id               Int       @id // ID del usuario en WordPress
+  email            String    @unique
+  username         String?
+  name             String?
+  isSuspended      Boolean   @default(false)
+  suspendedBy      String?   // ID del admin que suspendió
+  suspendedAt      DateTime?
+  suspensionReason String?
+  notes            String?   // Notas adicionales sobre el usuario
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([email])
+  @@index([isSuspended])
+}
