@@ -4,7 +4,21 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
-import WorkspaceClient from '@/components/workspace/WorkspaceClient'
+import dynamic from 'next/dynamic'
+import { TableSkeleton } from '@/components/ui/Loading'
+
+const WorkspaceClient = dynamic(() => import('@/components/workspace/WorkspaceClient'), {
+    ssr: false,
+    loading: () => (
+        <div className="space-y-6">
+            <div className="animate-pulse">
+                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-64 mb-2"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-96 mb-8"></div>
+            </div>
+            <TableSkeleton />
+        </div>
+    )
+})
 
 export default async function WorkspacePage() {
   const session = await getServerSession(authOptions)

@@ -47,6 +47,7 @@ export default function WorkspaceClient() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedOrgUnit, setSelectedOrgUnit] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'users' | 'orgunits' | 'history'>('users')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all')
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -167,6 +168,13 @@ export default function WorkspaceClient() {
   const activeUsers = users.filter(u => !u.suspended).length
   const suspendedUsers = users.filter(u => u.suspended).length
 
+  // Filtered users based on status
+  const filteredUsers = users.filter(user => {
+    if (statusFilter === 'active') return !user.suspended
+    if (statusFilter === 'suspended') return user.suspended
+    return true
+  })
+
   return (
     <div>
       {/* Header */}
@@ -214,7 +222,15 @@ export default function WorkspaceClient() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
+        <button
+          onClick={() => {
+            setStatusFilter('all')
+            setActiveTab('users')
+          }}
+          className={`bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 transition-all hover:shadow-lg hover:scale-105 text-left ${
+            statusFilter === 'all' ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Usuarios</p>
@@ -224,9 +240,17 @@ export default function WorkspaceClient() {
               <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
+        <button
+          onClick={() => {
+            setStatusFilter('active')
+            setActiveTab('users')
+          }}
+          className={`bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 transition-all hover:shadow-lg hover:scale-105 text-left ${
+            statusFilter === 'active' ? 'ring-2 ring-green-500 dark:ring-green-400' : ''
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Activos</p>
@@ -236,9 +260,17 @@ export default function WorkspaceClient() {
               <Users className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
+        <button
+          onClick={() => {
+            setStatusFilter('suspended')
+            setActiveTab('users')
+          }}
+          className={`bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 transition-all hover:shadow-lg hover:scale-105 text-left ${
+            statusFilter === 'suspended' ? 'ring-2 ring-red-500 dark:ring-red-400' : ''
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Suspendidos</p>
@@ -248,9 +280,12 @@ export default function WorkspaceClient() {
               <Users className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6">
+        <button
+          onClick={() => setActiveTab('orgunits')}
+          className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 transition-all hover:shadow-lg hover:scale-105 text-left"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Unidades Org.</p>
@@ -260,7 +295,7 @@ export default function WorkspaceClient() {
               <FolderTree className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Tabs */}
@@ -336,20 +371,36 @@ export default function WorkspaceClient() {
                 Buscar
               </button>
             </form>
-            {selectedOrgUnit && (
-              <button
-                onClick={() => { setSelectedOrgUnit(null); }}
-                className="px-3 py-2 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition flex items-center gap-1 max-w-full"
-              >
-                <FolderTree className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{selectedOrgUnit}</span>
-                <span className="ml-1 flex-shrink-0">&times;</span>
-              </button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {selectedOrgUnit && (
+                <button
+                  onClick={() => { setSelectedOrgUnit(null); }}
+                  className="px-3 py-2 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition flex items-center gap-1 max-w-full"
+                >
+                  <FolderTree className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{selectedOrgUnit}</span>
+                  <span className="ml-1 flex-shrink-0">&times;</span>
+                </button>
+              )}
+              {statusFilter !== 'all' && (
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-2 text-xs sm:text-sm rounded-lg transition flex items-center gap-1 ${
+                    statusFilter === 'active'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+                  }`}
+                >
+                  <Users className="h-3 w-3 flex-shrink-0" />
+                  <span>{statusFilter === 'active' ? 'Solo Activos' : 'Solo Suspendidos'}</span>
+                  <span className="ml-1 flex-shrink-0">&times;</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <WorkspaceUserList
-            users={users}
+            users={filteredUsers}
             loading={loading}
             onEdit={setEditingUser}
             onSuspend={handleSuspendUser}

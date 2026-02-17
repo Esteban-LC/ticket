@@ -56,6 +56,9 @@ model User {
   resultItems        ResultItem[]  @relation("UserResultItems")
   department         Department?   @relation(fields: [departmentId], references: [id])
   organization       Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([role])
+  @@index([departmentId])
 }
 
 model Ticket {
@@ -82,6 +85,13 @@ model Ticket {
   category       Category?      @relation(fields: [categoryId], references: [id])
   customer       User           @relation("CreatedTickets", fields: [customerId], references: [id])
   organization   Organization?  @relation(fields: [organizationId], references: [id])
+
+  @@index([status])
+  @@index([customerId])
+  @@index([assigneeId])
+  @@index([updatedAt])
+  @@index([createdAt])
+  @@index([priority])
 }
 
 model Category {
@@ -105,6 +115,10 @@ model Message {
   updatedAt   DateTime    @updatedAt
   author      User        @relation(fields: [authorId], references: [id])
   ticket      Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([authorId])
+  @@index([createdAt])
 }
 
 model Interaction {
@@ -262,4 +276,21 @@ enum AdminAction {
   DELETE_USER
   SUSPEND_USER
   UNSUSPEND_USER
+}
+
+model WordPressUser {
+  id               Int       @id // ID del usuario en WordPress
+  email            String    @unique
+  username         String?
+  name             String?
+  isSuspended      Boolean   @default(false)
+  suspendedBy      String?   // ID del admin que suspendió
+  suspendedAt      DateTime?
+  suspensionReason String?
+  notes            String?   // Notas adicionales sobre el usuario
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([email])
+  @@index([isSuspended])
 }

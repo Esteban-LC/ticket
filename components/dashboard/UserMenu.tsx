@@ -119,7 +119,7 @@ export default function UserMenu({ user, onLinkClick }: UserMenuProps) {
                         <button
                             onClick={() => {
                                 setIsOpen(false)
-                                signOut()
+                                signOut({ callbackUrl: window.location.origin })
                             }}
                             className="flex items-center space-x-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors w-full text-left"
                         >
