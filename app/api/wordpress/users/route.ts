@@ -18,7 +18,11 @@ export async function GET(request: NextRequest) {
 
     // Verificar permisos
     const userPermissions = (session.user as any).permissions || []
-    if (!userPermissions.includes('wordpress:manage_users') && session.user.role !== 'ADMIN') {
+    if (
+      !userPermissions.includes('wordpress:manage_users') &&
+      !userPermissions.includes('wordpress:manage_enrollments') &&
+      session.user.role !== 'ADMIN'
+    ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 
@@ -31,7 +35,7 @@ export async function GET(request: NextRequest) {
     const users = await wpUserService.getUsers({
       page,
       per_page,
-      search,
+      search: search?.trim() || undefined,
       roles: role ? [role] : undefined,
     })
 
@@ -40,6 +44,7 @@ export async function GET(request: NextRequest) {
     const suspendedUsers = await prisma.wordPressUser.findMany({
       where: {
         id: { in: userIds },
+        deletedAt: null,
       },
       select: {
         id: true,

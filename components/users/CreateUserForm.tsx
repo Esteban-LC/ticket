@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Lock, Shield, Phone, Building2, AlertCircle, KeyRound } from 'lucide-react'
+import { User, Mail, Lock, Shield, Building2, AlertCircle, KeyRound } from 'lucide-react'
 import Link from 'next/link'
 
 interface Department {
@@ -28,7 +28,6 @@ export default function CreateUserForm({ departments }: CreateUserFormProps) {
     name: '',
     email: '',
     password: '',
-    phone: '',
     departmentId: '',
     role: 'EDITOR' as 'ADMIN' | 'COORDINATOR' | 'EDITOR' | 'VIEWER',
     permissions: [] as string[],
@@ -217,8 +216,8 @@ export default function CreateUserForm({ departments }: CreateUserFormProps) {
             </div>
           </div>
 
-          {/* Rol y Teléfono */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+          {/* Rol */}
+          <div>
             {/* Rol */}
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
               <div className="flex items-start gap-3 mb-4">
@@ -273,29 +272,6 @@ export default function CreateUserForm({ departments }: CreateUserFormProps) {
               </div>
             </div>
 
-            {/* Teléfono */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
-                  <Phone className="h-5 w-5 text-pink-600 dark:text-pink-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    Teléfono
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Número de contacto
-                  </p>
-                </div>
-              </div>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+52 123 456 7890"
-                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
           </div>
 
           {/* Permisos Especiales - para roles no ADMIN */}

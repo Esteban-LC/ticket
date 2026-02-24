@@ -1,8 +1,8 @@
 'use client'
 
 import { AlertTriangle, CheckCircle, Info, XCircle, Loader2 } from 'lucide-react'
-import Modal from './Modal'
 import { useEffect, useState } from 'react'
+import Modal from './Modal'
 
 interface ActionPromptDialogProps {
   isOpen: boolean
@@ -17,6 +17,10 @@ interface ActionPromptDialogProps {
   successMessage?: string
   loadingMessage?: string
   required?: boolean
+  requireTextConfirmation?: boolean
+  confirmationText?: string
+  confirmationLabel?: string
+  confirmationPlaceholder?: string
 }
 
 type DialogState = 'prompt' | 'loading' | 'success' | 'error'
@@ -27,24 +31,29 @@ export default function ActionPromptDialog({
   onConfirm,
   title,
   message,
-  placeholder = 'Escribe aquí...',
+  placeholder = 'Escribe aqui...',
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   variant = 'info',
-  successMessage = 'Acción completada exitosamente',
+  successMessage = 'Accion completada exitosamente',
   loadingMessage = 'Procesando...',
   required = false,
+  requireTextConfirmation = false,
+  confirmationText = 'CONFIRMAR',
+  confirmationLabel,
+  confirmationPlaceholder,
 }: ActionPromptDialogProps) {
   const [state, setState] = useState<DialogState>('prompt')
   const [value, setValue] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [confirmationValue, setConfirmationValue] = useState('')
 
-  // Reset state when dialog opens
   useEffect(() => {
     if (isOpen) {
       setState('prompt')
       setValue('')
       setErrorMessage('')
+      setConfirmationValue('')
     }
   }, [isOpen])
 
@@ -57,17 +66,11 @@ export default function ActionPromptDialog({
     try {
       await onConfirm(value)
       setState('success')
-      // Auto-close after showing success
-      setTimeout(() => {
-        onClose()
-      }, 1500)
+      setTimeout(() => onClose(), 1500)
     } catch (error: any) {
       setState('error')
-      setErrorMessage(error.message || 'Ocurrió un error')
-      // Auto-close after showing error
-      setTimeout(() => {
-        onClose()
-      }, 2000)
+      setErrorMessage(error.message || 'Ocurrio un error')
+      setTimeout(() => onClose(), 2000)
     }
   }
 
@@ -100,11 +103,13 @@ export default function ActionPromptDialog({
 
   const config = variantConfig[variant]
   const Icon = config.icon
+  const normalizedInput = confirmationValue.trim().toUpperCase()
+  const normalizedExpected = confirmationText.trim().toUpperCase()
+  const isTextConfirmationValid = !requireTextConfirmation || normalizedInput === normalizedExpected
 
-  // Render según el estado
   if (state === 'loading') {
     return (
-      <Modal isOpen={isOpen} onClose={() => {}} title={title} size="sm">
+      <Modal isOpen={isOpen} onClose={() => { }} title={title} size="sm">
         <div className="py-8">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-12 w-12 text-blue-600 dark:text-blue-400 animate-spin" />
@@ -119,7 +124,7 @@ export default function ActionPromptDialog({
 
   if (state === 'success') {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="¡Éxito!" size="sm">
+      <Modal isOpen={isOpen} onClose={onClose} title="Exito" size="sm">
         <div className="py-8">
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
@@ -154,8 +159,7 @@ export default function ActionPromptDialog({
     )
   }
 
-  // Estado de prompt (default)
-  const isButtonDisabled = required && !value.trim()
+  const isButtonDisabled = (required && !value.trim()) || !isTextConfirmationValid
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
@@ -182,6 +186,22 @@ export default function ActionPromptDialog({
           <p className="text-sm text-gray-500 dark:text-gray-400">
             * Campo requerido
           </p>
+        )}
+
+        {requireTextConfirmation && (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {confirmationLabel || `Escribe ${confirmationText} para continuar.`}
+            </p>
+            <input
+              type="text"
+              value={confirmationValue}
+              onChange={(e) => setConfirmationValue(e.target.value)}
+              placeholder={confirmationPlaceholder || confirmationText}
+              autoComplete="off"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            />
+          </div>
         )}
 
         <div className="flex gap-3 justify-end pt-4">

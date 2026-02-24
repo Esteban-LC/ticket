@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { UserRole } from '@prisma/client'
 import { useRouter } from 'next/navigation'
-import { Mail, Phone, Ticket, UserCog } from 'lucide-react'
+import { Mail, Ticket, UserCog } from 'lucide-react'
 import EditUserModal from './EditUserModal'
 
 interface User {
@@ -14,7 +14,6 @@ interface User {
   email: string
   avatar: string | null
   role: UserRole
-  phone: string | null
   permissions: string[]
   createdAt: Date
   department?: {
@@ -102,13 +101,6 @@ export default function UsersTable({ users }: UsersTableProps) {
                   <Mail className="h-4 w-4 mr-2" />
                   <span className="truncate">{user.email}</span>
                 </div>
-
-                {user.phone && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <Phone className="h-4 w-4 mr-2" />
-                    <span>{user.phone}</span>
-                  </div>
-                )}
 
               </div>
 

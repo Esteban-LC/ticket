@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { name, email, password, role, phone, location } = await request.json()
+    const { name, email, password, role, location } = await request.json()
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -25,8 +25,8 @@ export async function POST(request: Request) {
     }
 
     // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
+    const existingUser = await prisma.user.findFirst({
+      where: { email, deletedAt: null }
     })
 
     if (existingUser) {
@@ -46,7 +46,6 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword,
         role: role || 'EDITOR',
-        phone,
         location,
       },
       select: {
@@ -82,8 +81,8 @@ export async function PATCH(
     }
 
     // Obtener usuario con su rol
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
+    const currentUser = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
       select: { role: true }
     })
 
@@ -96,11 +95,10 @@ export async function PATCH(
     }
 
     const data = await request.json()
-    const { name, departmentId, phone, password, permissions, role } = data
+    const { name, departmentId, password, permissions, role } = data
 
     const updateData: any = {
       name,
-      phone,
     }
 
     // Actualizar permisos si se proporcionan
@@ -132,15 +130,26 @@ export async function PATCH(
       updateData.password = await bcrypt.hash(password, 10)
     }
 
+    const existingTarget = await prisma.user.findFirst({
+      where: { id: params.id, deletedAt: null },
+      select: { id: true },
+    })
+
+    if (!existingTarget) {
+      return NextResponse.json(
+        { error: 'Usuario no encontrado' },
+        { status: 404 }
+      )
+    }
+
     const user = await prisma.user.update({
-      where: { id: params.id },
+      where: { id: existingTarget.id },
       data: updateData,
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
-        phone: true,
         permissions: true,
         department: {
           select: {
@@ -176,9 +185,9 @@ export async function DELETE(
     }
 
     // Obtener usuario con su rol
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
-      select: { id: true, role: true }
+    const currentUser = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
+      select: { id: true, email: true, role: true }
     })
 
     // Solo ADMIN puede eliminar usuarios
@@ -197,8 +206,43 @@ export async function DELETE(
       )
     }
 
-    await prisma.user.delete({
-      where: { id: params.id }
+    const targetUser = await prisma.user.findFirst({
+      where: { id: params.id, deletedAt: null },
+      select: { id: true, email: true, name: true },
+    })
+
+    if (!targetUser) {
+      return NextResponse.json(
+        { error: 'Usuario no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    const deletedSuffix = Date.now()
+    const tombstoneEmail = `deleted+${deletedSuffix}.${targetUser.id}@deleted.local`
+
+    await prisma.user.update({
+      where: { id: targetUser.id },
+      data: {
+        deletedAt: new Date(),
+        email: tombstoneEmail,
+      }
+    })
+
+    await prisma.adminLog.create({
+      data: {
+        action: 'DELETE_USER',
+        adminId: currentUser.id,
+        adminEmail: currentUser.email,
+        targetEmail: targetUser.email,
+        targetName: targetUser.name || null,
+        details: {
+          softDelete: true,
+          entity: 'USER',
+          userId: targetUser.id,
+          tombstoneEmail,
+        },
+      },
     })
 
     return NextResponse.json({ message: 'Usuario eliminado' })

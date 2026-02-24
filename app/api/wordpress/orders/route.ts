@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_orders') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_orders') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })

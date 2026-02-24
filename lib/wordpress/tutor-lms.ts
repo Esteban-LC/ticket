@@ -56,6 +56,17 @@ export interface CourseProgress {
 }
 
 export class TutorLMSService {
+  private isMissingCustomRoute(error: any): boolean {
+    const msg = String(error?.message || '').toLowerCase()
+    return (
+      msg.includes('404') &&
+      (msg.includes('/custom/v1/enroll') ||
+        msg.includes('/custom/v1/unenroll') ||
+        msg.includes('no se ha encontrado ninguna ruta') ||
+        msg.includes('no route was found'))
+    )
+  }
+
   /**
    * Obtener todos los cursos
    */
@@ -94,10 +105,41 @@ export class TutorLMSService {
   /**
    * Matricular un estudiante en un curso
    */
-  async enrollStudent(userId: number, courseId: number): Promise<any> {
-    return wpClient.post('/tutor/v1/course-enroll', {
+  async enrollStudent(
+    userId: number,
+    courseId: number,
+    options?: { skipOrderCheck?: boolean }
+  ): Promise<any> {
+    try {
+      return await wpClient.post('/custom/v1/enroll', {
+        user_id: userId,
+        course_id: courseId,
+        skip_order_check: options?.skipOrderCheck || false,
+      })
+    } catch (customError: any) {
+      if (!this.isMissingCustomRoute(customError)) {
+        throw customError
+      }
+
+      return wpClient.post('/tutor/v1/course-enroll', {
+        user_id: userId,
+        course_id: courseId,
+      })
+    }
+  }
+
+  /**
+   * Matricular un estudiante en múltiples cursos (custom endpoint)
+   */
+  async enrollStudentInCoursesBatch(
+    userId: number,
+    courseIds: number[],
+    options?: { skipOrderCheck?: boolean }
+  ): Promise<any> {
+    return wpClient.post('/custom/v1/enroll-batch', {
       user_id: userId,
-      course_id: courseId,
+      course_ids: courseIds,
+      skip_order_check: options?.skipOrderCheck || false,
     })
   }
 
@@ -105,10 +147,21 @@ export class TutorLMSService {
    * Desmatricular un estudiante de un curso
    */
   async unenrollStudent(userId: number, courseId: number): Promise<any> {
-    return wpClient.post('/tutor/v1/course-unenroll', {
-      user_id: userId,
-      course_id: courseId,
-    })
+    try {
+      return await wpClient.post('/custom/v1/unenroll', {
+        user_id: userId,
+        course_id: courseId,
+      })
+    } catch (customError: any) {
+      if (!this.isMissingCustomRoute(customError)) {
+        throw customError
+      }
+
+      return wpClient.post('/tutor/v1/course-unenroll', {
+        user_id: userId,
+        course_id: courseId,
+      })
+    }
   }
 
   /**

@@ -16,8 +16,8 @@ export async function POST(request: Request) {
     }
 
     // Obtener usuario con su rol
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
+    const user = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
       select: { role: true }
     })
 
@@ -39,8 +39,8 @@ export async function POST(request: Request) {
     }
 
     // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
+    const existingUser = await prisma.user.findFirst({
+      where: { email, deletedAt: null }
     })
 
     if (existingUser) {
@@ -95,8 +95,8 @@ export async function GET(request: Request) {
     }
 
     // Obtener usuario con su rol
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
+    const user = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
       select: { role: true }
     })
 
@@ -110,7 +110,8 @@ export async function GET(request: Request) {
 
     const customers = await prisma.user.findMany({
       where: {
-        role: 'VIEWER'
+        role: 'VIEWER',
+        deletedAt: null,
       },
       select: {
         id: true,

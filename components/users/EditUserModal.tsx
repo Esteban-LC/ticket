@@ -15,12 +15,15 @@ const AVAILABLE_PERMISSIONS = [
   { key: 'workspace:access', label: 'Workspace', description: 'Acceso al espacio de trabajo compartido para registrar' },
 ]
 
+const ADMIN_PERMISSIONS = [
+  { key: 'VIEW_DEPARTMENT_REPORTS', label: 'Ver Reportes por Departamento', description: 'Acceso a la vista de todos los reportes agrupados por departamento' },
+]
+
 interface EditUserModalProps {
   user: {
     id: string
     name: string | null
     email: string
-    phone: string | null
     role: string
     permissions?: string[]
     department?: {
@@ -39,7 +42,6 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
   const [formData, setFormData] = useState({
     name: user.name || '',
     departmentId: user.department?.id || '',
-    phone: user.phone || '',
     role: user.role || 'EDITOR',
     permissions: user.permissions || [] as string[],
     newPassword: '',
@@ -77,7 +79,6 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
       const updateData: any = {
         name: formData.name,
         departmentId: formData.departmentId || null,
-        phone: formData.phone,
         role: formData.role,
         permissions: formData.permissions,
       }
@@ -222,7 +223,7 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
               )}
             </div>
 
-            {/* Permisos Especiales */}
+            {/* Permisos Especiales (no-ADMIN) */}
             {formData.role !== 'ADMIN' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
@@ -255,6 +256,39 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
               </div>
             )}
 
+            {/* Capacidades adicionales (ADMIN) */}
+            {formData.role === 'ADMIN' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
+                  <KeyRound className="h-4 w-4" />
+                  Capacidades Adicionales
+                </label>
+                <div className="space-y-2">
+                  {ADMIN_PERMISSIONS.map((perm) => (
+                    <label
+                      key={perm.key}
+                      className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.permissions.includes(perm.key)}
+                        onChange={() => togglePermission(perm.key)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {perm.label}
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {perm.description}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Nueva Contraseña
@@ -269,17 +303,6 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Mínimo 6 caracteres. Dejar vacío para no cambiar.</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Teléfono
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
 
             <div className="flex justify-between items-center pt-4 border-t dark:border-slate-700">
               <button

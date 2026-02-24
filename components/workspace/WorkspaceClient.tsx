@@ -11,6 +11,10 @@ import {
   AlertCircle,
   History,
   ArrowLeft,
+  UserCircle2,
+  PauseCircle,
+  PlayCircle,
+  Globe,
 } from 'lucide-react'
 import OrgUnitTree from './OrgUnitTree'
 import WorkspaceUserList from './WorkspaceUserList'
@@ -29,6 +33,11 @@ interface WorkspaceUser {
   creationTime: string
   lastLoginTime: string
   thumbnailPhotoUrl?: string
+  wordPressUserId?: number | null
+  hasWordPressUser?: boolean
+  wordPressSuspended?: boolean
+  wordPressSuspendedAt?: string | null
+  wordPressSuspensionReason?: string | null
 }
 
 interface OrgUnit {
@@ -46,8 +55,10 @@ export default function WorkspaceClient() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedOrgUnit, setSelectedOrgUnit] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'users' | 'orgunits' | 'history'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'orgunits' | 'history' | 'profile'>('users')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all')
+  const [recencyFilter, setRecencyFilter] = useState<'all' | 'created_7d' | 'created_30d' | 'login_7d' | 'login_30d'>('all')
+  const [selectedUserEmail, setSelectedUserEmail] = useState<string | null>(null)
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -56,6 +67,8 @@ export default function WorkspaceClient() {
     type: 'suspend' | 'unsuspend' | 'delete'
     user: WorkspaceUser
   } | null>(null)
+  const [syncWithWordPress, setSyncWithWordPress] = useState(true)
+  const [suspendWordPressReason, setSuspendWordPressReason] = useState('')
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -71,7 +84,8 @@ export default function WorkspaceClient() {
         throw new Error(data.error || 'Error al cargar usuarios')
       }
       const data = await res.json()
-      setUsers(data.users || [])
+      const nextUsers: WorkspaceUser[] = data.users || []
+      setUsers(nextUsers)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -98,12 +112,23 @@ export default function WorkspaceClient() {
     fetchOrgUnits()
   }, [fetchUsers, fetchOrgUnits])
 
+  useEffect(() => {
+    if (selectedUserEmail && !users.some((u) => u.primaryEmail === selectedUserEmail)) {
+      setSelectedUserEmail(null)
+      if (activeTab === 'profile') {
+        setActiveTab('users')
+      }
+    }
+  }, [users, selectedUserEmail, activeTab])
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     fetchUsers()
   }
 
   const handleSuspendUser = async (user: WorkspaceUser) => {
+    setSyncWithWordPress(true)
+    setSuspendWordPressReason('')
     setConfirmAction({
       type: user.suspended ? 'unsuspend' : 'suspend',
       user,
@@ -119,6 +144,7 @@ export default function WorkspaceClient() {
 
     try {
       const { type, user } = confirmAction
+      let wordPressSyncMessage: string | null = null
 
       if (type === 'delete') {
         const res = await fetch(`/api/workspace/users/${encodeURIComponent(user.primaryEmail)}`, {
@@ -140,8 +166,68 @@ export default function WorkspaceClient() {
         }
       }
 
+      if ((type === 'suspend' || type === 'unsuspend') && syncWithWordPress) {
+        const searchParams = new URLSearchParams({
+          search: user.primaryEmail,
+          per_page: '100',
+        })
+
+        const wpUsersRes = await fetch(`/api/wordpress/users?${searchParams.toString()}`)
+        const wpUsersData = await wpUsersRes.json()
+
+        if (!wpUsersRes.ok) {
+          throw new Error(
+            `Usuario suspendido en Workspace, pero fallo la busqueda en WordPress: ${wpUsersData.error || 'Error desconocido'}`
+          )
+        }
+
+        const targetWpUser = (wpUsersData.users || []).find(
+          (wpUser: any) => String(wpUser.email || '').toLowerCase() === user.primaryEmail.toLowerCase()
+        )
+
+        if (!targetWpUser) {
+          wordPressSyncMessage =
+            type === 'suspend'
+              ? `Usuario suspendido en Workspace. No se encontro un usuario en WordPress con email ${user.primaryEmail}.`
+              : `Usuario reactivado en Workspace. No se encontro un usuario en WordPress con email ${user.primaryEmail}.`
+        } else {
+          if (type === 'suspend') {
+            const wpSuspendRes = await fetch(`/api/wordpress/users/${targetWpUser.id}/suspend`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                reason: suspendWordPressReason.trim() || `Suspendido desde Workspace (${user.primaryEmail})`,
+              }),
+            })
+            const wpSuspendData = await wpSuspendRes.json()
+
+            if (!wpSuspendRes.ok) {
+              throw new Error(
+                `Usuario suspendido en Workspace, pero fallo la suspension en WordPress: ${wpSuspendData.error || 'Error desconocido'}`
+              )
+            }
+          } else {
+            const wpUnsuspendRes = await fetch(`/api/wordpress/users/${targetWpUser.id}/suspend`, {
+              method: 'DELETE',
+            })
+            const wpUnsuspendData = await wpUnsuspendRes.json()
+
+            if (!wpUnsuspendRes.ok) {
+              throw new Error(
+                `Usuario reactivado en Workspace, pero fallo la habilitacion en WordPress: ${wpUnsuspendData.error || 'Error desconocido'}`
+              )
+            }
+          }
+        }
+      }
+
       setConfirmAction(null)
+      setSuspendWordPressReason('')
       fetchUsers()
+
+      if (wordPressSyncMessage) {
+        alert(wordPressSyncMessage)
+      }
     } catch (err: any) {
       alert('Error: ' + err.message)
     }
@@ -163,17 +249,40 @@ export default function WorkspaceClient() {
     setActiveTab('users')
   }
 
+  const handleSelectUserProfile = (user: WorkspaceUser) => {
+    setSelectedUserEmail(user.primaryEmail)
+    setActiveTab('profile')
+  }
+
   // Stats
   const totalUsers = users.length
   const activeUsers = users.filter(u => !u.suspended).length
   const suspendedUsers = users.filter(u => u.suspended).length
 
   // Filtered users based on status
-  const filteredUsers = users.filter(user => {
-    if (statusFilter === 'active') return !user.suspended
-    if (statusFilter === 'suspended') return user.suspended
+  const isWithinDays = (dateStr: string, days: number) => {
+    if (!dateStr) return false
+    const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return false
+    const limit = new Date()
+    limit.setDate(limit.getDate() - days)
+    return date >= limit
+  }
+
+  const filteredUsers = users.filter((user) => {
+    if (statusFilter === 'active' && user.suspended) return false
+    if (statusFilter === 'suspended' && !user.suspended) return false
+
+    if (recencyFilter === 'created_7d') return isWithinDays(user.creationTime, 7)
+    if (recencyFilter === 'created_30d') return isWithinDays(user.creationTime, 30)
+    if (recencyFilter === 'login_7d') return isWithinDays(user.lastLoginTime, 7)
+    if (recencyFilter === 'login_30d') return isWithinDays(user.lastLoginTime, 30)
+
     return true
   })
+  const selectedUser = selectedUserEmail
+    ? users.find((user) => user.primaryEmail === selectedUserEmail) || null
+    : null
 
   return (
     <div>
@@ -334,6 +443,17 @@ export default function WorkspaceClient() {
           <History className="h-4 w-4" />
           Historial
         </button>
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+            activeTab === 'profile'
+              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <UserCircle2 className="h-4 w-4" />
+          Perfil
+        </button>
       </div>
 
       {/* Content */}
@@ -382,6 +502,17 @@ export default function WorkspaceClient() {
                   <span className="ml-1 flex-shrink-0">&times;</span>
                 </button>
               )}
+              <select
+                value={recencyFilter}
+                onChange={(e) => setRecencyFilter(e.target.value as typeof recencyFilter)}
+                className="px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-800 border dark:border-slate-700 text-gray-700 dark:text-gray-300 rounded-lg"
+              >
+                <option value="all">Todas las fechas</option>
+                <option value="created_7d">Creados en 7 dias</option>
+                <option value="created_30d">Creados en 30 dias</option>
+                <option value="login_7d">Acceso en 7 dias</option>
+                <option value="login_30d">Acceso en 30 dias</option>
+              </select>
               {statusFilter !== 'all' && (
                 <button
                   onClick={() => setStatusFilter('all')}
@@ -396,6 +527,15 @@ export default function WorkspaceClient() {
                   <span className="ml-1 flex-shrink-0">&times;</span>
                 </button>
               )}
+              {recencyFilter !== 'all' && (
+                <button
+                  onClick={() => setRecencyFilter('all')}
+                  className="px-3 py-2 text-xs sm:text-sm bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition flex items-center gap-1"
+                >
+                  <span>Filtro reciente</span>
+                  <span className="ml-1">&times;</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -405,6 +545,8 @@ export default function WorkspaceClient() {
             onEdit={setEditingUser}
             onSuspend={handleSuspendUser}
             onDelete={handleDeleteUser}
+            onSelect={handleSelectUserProfile}
+            selectedUserEmail={selectedUserEmail}
           />
         </div>
       )}
@@ -417,6 +559,104 @@ export default function WorkspaceClient() {
       )}
 
       {activeTab === 'history' && <AdminHistory />}
+
+      {activeTab === 'profile' && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
+          {!selectedUser ? (
+            <div className="text-center py-10">
+              <UserCircle2 className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-600 dark:text-gray-400">
+                Selecciona un usuario en la tabla para ver su perfil.
+              </p>
+              <button
+                onClick={() => setActiveTab('users')}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+              >
+                Ir a Usuarios
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{selectedUser.name.fullName}</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{selectedUser.primaryEmail}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className="px-3 py-2 text-sm bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition"
+                  >
+                    Volver a tabla
+                  </button>
+                  <button
+                    onClick={() => handleSuspendUser(selectedUser)}
+                    className={`px-3 py-2 text-sm rounded-lg transition ${
+                      selectedUser.suspended
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white'
+                    }`}
+                  >
+                    {selectedUser.suspended ? 'Reactivar' : 'Suspender'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border dark:border-slate-700 rounded-lg p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Estado Google Workspace</p>
+                  <div className="flex items-center gap-2">
+                    {selectedUser.suspended ? (
+                      <>
+                        <PauseCircle className="h-4 w-4 text-red-500" />
+                        <span className="text-red-600 dark:text-red-400 font-medium">Suspendido</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="h-4 w-4 text-green-500" />
+                        <span className="text-green-600 dark:text-green-400 font-medium">Activo</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Unidad: {selectedUser.orgUnitPath || '/'}</p>
+                </div>
+
+                <div className="border dark:border-slate-700 rounded-lg p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Estado Usuarios WP</p>
+                  {!selectedUser.hasWordPressUser ? (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-gray-400" />
+                        <span className="text-gray-600 dark:text-gray-300 font-medium">Sin usuario vinculado en WordPress</span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        No existe registro local en la tabla `WordPressUser` para este email.
+                      </p>
+                    </div>
+                  ) : selectedUser.wordPressSuspended ? (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <PauseCircle className="h-4 w-4 text-red-500" />
+                        <span className="text-red-600 dark:text-red-400 font-medium">Inhabilitado en WordPress</span>
+                      </div>
+                      {selectedUser.wordPressSuspensionReason && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                          Razon: {selectedUser.wordPressSuspensionReason}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <PlayCircle className="h-4 w-4 text-green-500" />
+                      <span className="text-green-600 dark:text-green-400 font-medium">Habilitado en WordPress</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modals */}
       {showCreateModal && (
@@ -457,8 +697,42 @@ export default function WorkspaceClient() {
             confirmAction.type === 'delete' ? 'Eliminar' : confirmAction.type === 'suspend' ? 'Suspender' : 'Reactivar'
           }
           variant={confirmAction.type === 'delete' ? 'danger' : confirmAction.type === 'suspend' ? 'warning' : 'success'}
+          extraContent={confirmAction.type === 'suspend' || confirmAction.type === 'unsuspend' ? (
+            <div className="space-y-3">
+              <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  checked={syncWithWordPress}
+                  onChange={(e) => setSyncWithWordPress(e.target.checked)}
+                />
+                <span>
+                  {confirmAction.type === 'suspend'
+                    ? 'Suspender tambien en Usuarios WP (2 en 1)'
+                    : 'Habilitar tambien en Usuarios WP (2 en 1)'}
+                </span>
+              </label>
+              {confirmAction.type === 'suspend' && syncWithWordPress && (
+                <textarea
+                  value={suspendWordPressReason}
+                  onChange={(e) => setSuspendWordPressReason(e.target.value)}
+                  rows={2}
+                  placeholder="Razon de suspension en WordPress (opcional)"
+                  className="w-full px-3 py-2 text-sm border dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+              )}
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {confirmAction.type === 'suspend'
+                  ? 'Si no marcas esta opcion, solo se suspende en Google Workspace.'
+                  : 'Si no marcas esta opcion, solo se reactiva en Google Workspace.'}
+              </p>
+            </div>
+          ) : undefined}
           onConfirm={executeConfirmAction}
-          onCancel={() => setConfirmAction(null)}
+          onCancel={() => {
+            setConfirmAction(null)
+            setSuspendWordPressReason('')
+          }}
         />
       )}
     </div>

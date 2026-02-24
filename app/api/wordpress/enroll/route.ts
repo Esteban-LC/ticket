@@ -19,23 +19,75 @@ export async function POST(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_enrollments') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 
-    const { user_id, course_id } = await request.json()
+    const body: any = await request.json()
+    const user_id = body.user_id ? Number(body.user_id) : undefined
+    const user_ids: number[] = Array.isArray(body.user_ids)
+      ? body.user_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+    const course_ids: number[] = Array.isArray(body.course_ids)
+      ? body.course_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+    const course_id = body.course_id ? Number(body.course_id) : undefined
+    const skip_order_check = Boolean(body.skip_order_check)
 
-    if (!user_id || !course_id) {
+    // Modo: un usuario -> múltiples cursos
+    if (user_id && course_ids.length > 0) {
+      const result = await tutorLMSService.enrollStudentInCoursesBatch(user_id, course_ids, {
+        skipOrderCheck: skip_order_check,
+      })
+
+      const failed = Number(result?.summary?.failed || 0)
+      return NextResponse.json(result, { status: failed > 0 ? 207 : 201 })
+    }
+
+    if (!course_id || (!user_id && user_ids.length === 0)) {
       return NextResponse.json(
-        { error: 'user_id y course_id son requeridos' },
+        { error: 'course_id y user_id (o user_ids), o bien user_id + course_ids son requeridos' },
         { status: 400 }
       )
     }
 
-    const result = await tutorLMSService.enrollStudent(user_id, course_id)
+    // Modo individual (retrocompatibilidad)
+    if (user_id && user_ids.length === 0) {
+      const result = await tutorLMSService.enrollStudent(user_id, course_id, { skipOrderCheck: skip_order_check })
+      return NextResponse.json({ success: true, result }, { status: 201 })
+    }
 
-    return NextResponse.json({ success: true, result }, { status: 201 })
+    // Modo masivo
+    const targets: number[] = user_ids.length > 0 ? user_ids : (user_id ? [user_id] : [])
+    const uniqueTargets: number[] = Array.from(new Set<number>(targets))
+    const results: Array<{ user_id: number; success: boolean; error?: string }> = []
+
+    for (const targetUserId of uniqueTargets) {
+      try {
+        await tutorLMSService.enrollStudent(targetUserId, course_id, { skipOrderCheck: skip_order_check })
+        results.push({ user_id: targetUserId, success: true })
+      } catch (error: any) {
+        results.push({
+          user_id: targetUserId,
+          success: false,
+          error: error.message || 'Error al matricular',
+        })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failedCount = results.length - successCount
+
+    return NextResponse.json({
+      success: failedCount === 0,
+      course_id,
+      total: results.length,
+      successCount,
+      failedCount,
+      results,
+    }, { status: failedCount > 0 ? 207 : 201 })
   } catch (error: any) {
     console.error('Error enrolling student:', error)
     return NextResponse.json(
@@ -61,23 +113,61 @@ export async function DELETE(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_enrollments') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 
-    const { user_id, course_id } = await request.json()
+    const body: any = await request.json()
+    const user_id = body.user_id ? Number(body.user_id) : undefined
+    const user_ids: number[] = Array.isArray(body.user_ids)
+      ? body.user_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+    const course_id = body.course_id ? Number(body.course_id) : undefined
 
-    if (!user_id || !course_id) {
+    if (!course_id || (!user_id && user_ids.length === 0)) {
       return NextResponse.json(
-        { error: 'user_id y course_id son requeridos' },
+        { error: 'course_id y user_id (o user_ids) son requeridos' },
         { status: 400 }
       )
     }
 
-    const result = await tutorLMSService.unenrollStudent(user_id, course_id)
+    // Modo individual (retrocompatibilidad)
+    if (user_id && user_ids.length === 0) {
+      const result = await tutorLMSService.unenrollStudent(user_id, course_id)
+      return NextResponse.json({ success: true, result })
+    }
 
-    return NextResponse.json({ success: true, result })
+    // Modo masivo
+    const targets: number[] = user_ids.length > 0 ? user_ids : (user_id ? [user_id] : [])
+    const uniqueTargets: number[] = Array.from(new Set<number>(targets))
+    const results: Array<{ user_id: number; success: boolean; error?: string }> = []
+
+    for (const targetUserId of uniqueTargets) {
+      try {
+        await tutorLMSService.unenrollStudent(targetUserId, course_id)
+        results.push({ user_id: targetUserId, success: true })
+      } catch (error: any) {
+        results.push({
+          user_id: targetUserId,
+          success: false,
+          error: error.message || 'Error al desmatricular',
+        })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failedCount = results.length - successCount
+
+    return NextResponse.json({
+      success: failedCount === 0,
+      course_id,
+      total: results.length,
+      successCount,
+      failedCount,
+      results,
+    }, { status: failedCount > 0 ? 207 : 200 })
   } catch (error: any) {
     console.error('Error unenrolling student:', error)
     return NextResponse.json(

@@ -29,6 +29,48 @@ export class WordPressClient {
   }
 
   /**
+   * Parsear respuesta de WordPress de forma segura.
+   * Evita errores cuando WP responde HTML (login, error fatal, mantenimiento, etc).
+   */
+  private async parseResponse<T>(response: Response, requestUrl?: string): Promise<T> {
+    const contentType = response.headers.get('content-type') || ''
+    const isJson = contentType.toLowerCase().includes('application/json')
+    const urlInfo = requestUrl || response.url || 'unknown-url'
+
+    if (!response.ok) {
+      if (isJson) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(
+          `WordPress API Error: ${response.status} - ${error.message || response.statusText} [${urlInfo}]`
+        )
+      }
+
+      const text = await response.text().catch(() => '')
+      const preview = text.replace(/\s+/g, ' ').trim().slice(0, 180)
+      throw new Error(
+        `WordPress API Error: ${response.status} - Respuesta no JSON (${contentType || 'sin content-type'}) [${urlInfo}]. ${preview}`
+      )
+    }
+
+    if (!isJson) {
+      const text = await response.text().catch(() => '')
+      const preview = text.replace(/\s+/g, ' ').trim().slice(0, 180)
+      throw new Error(
+        `WordPress API Error: respuesta inesperada no JSON (${contentType || 'sin content-type'}) [${urlInfo}]. ${preview}`
+      )
+    }
+    try {
+      return await response.json()
+    } catch {
+      const text = await response.text().catch(() => '')
+      const preview = text.replace(/\s+/g, ' ').trim().slice(0, 180)
+      throw new Error(
+        `WordPress API Error: JSON inválido (${contentType || 'sin content-type'}) [${urlInfo}]. ${preview}`
+      )
+    }
+  }
+
+  /**
    * Realizar una petición GET
    */
   async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
@@ -48,16 +90,10 @@ export class WordPressClient {
         'Authorization': this.authHeader,
         'Content-Type': 'application/json',
       },
+      cache: 'no-store',
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        `WordPress API Error: ${response.status} - ${error.message || response.statusText}`
-      )
-    }
-
-    return response.json()
+    return this.parseResponse<T>(response, url.toString())
   }
 
   /**
@@ -82,6 +118,7 @@ export class WordPressClient {
         'Authorization': this.authHeader,
         'Content-Type': 'application/json',
       },
+      cache: 'no-store',
     })
 
     if (!response.ok) return 0
@@ -101,14 +138,7 @@ export class WordPressClient {
       body: JSON.stringify(data),
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        `WordPress API Error: ${response.status} - ${error.message || response.statusText}`
-      )
-    }
-
-    return response.json()
+    return this.parseResponse<T>(response, `${this.config.apiUrl}${endpoint}`)
   }
 
   /**
@@ -124,14 +154,7 @@ export class WordPressClient {
       body: JSON.stringify(data),
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        `WordPress API Error: ${response.status} - ${error.message || response.statusText}`
-      )
-    }
-
-    return response.json()
+    return this.parseResponse<T>(response, `${this.config.apiUrl}${endpoint}`)
   }
 
   /**
@@ -147,14 +170,7 @@ export class WordPressClient {
       body: JSON.stringify(data),
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        `WordPress API Error: ${response.status} - ${error.message || response.statusText}`
-      )
-    }
-
-    return response.json()
+    return this.parseResponse<T>(response, `${this.config.apiUrl}${endpoint}`)
   }
 
   /**
@@ -174,14 +190,7 @@ export class WordPressClient {
       },
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        `WordPress API Error: ${response.status} - ${error.message || response.statusText}`
-      )
-    }
-
-    return response.json()
+    return this.parseResponse<T>(response, url.toString())
   }
 }
 

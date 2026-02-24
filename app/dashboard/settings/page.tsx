@@ -4,8 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
-import TwoFactorSettings from '@/components/settings/TwoFactorSettings'
-import { Settings as SettingsIcon, Building2, Mail, Globe, Shield, Bell, Database, Download, Save, Calendar, User, Layout, Link as LinkIcon } from 'lucide-react'
+import { Settings as SettingsIcon, Mail, Globe, Shield, Bell, Database, Download, Archive } from 'lucide-react'
 
 export const metadata = {
   title: 'Configuración | Tickets LICEO MICHOACANO',
@@ -27,7 +26,6 @@ export default async function SettingsPage() {
       name: true,
       email: true,
       role: true,
-      twoFactorEnabled: true
     }
   })
 
@@ -44,11 +42,29 @@ export default async function SettingsPage() {
   const openTicketsCount = await prisma.ticket.count({ where: { status: 'OPEN' } })
 
   // Obtener estadísticas del sistema
-  const stats = await prisma.$transaction([
-    prisma.user.count(),
-    prisma.ticket.count(),
-    prisma.category.count(),
-    prisma.user.count({ where: { role: 'ADMIN' } }),
+  const [stats, softDeleteStats, recentSoftDeletes] = await Promise.all([
+    prisma.$transaction([
+      prisma.user.count({ where: { deletedAt: null } }),
+      prisma.ticket.count(),
+      prisma.category.count(),
+      prisma.user.count({ where: { role: 'ADMIN', deletedAt: null } }),
+    ]),
+    prisma.$transaction([
+      prisma.user.count({ where: { deletedAt: { not: null } } }),
+      prisma.wordPressUser.count({ where: { deletedAt: { not: null } } }),
+    ]),
+    prisma.adminLog.findMany({
+      where: { action: 'DELETE_USER' },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: {
+        id: true,
+        targetEmail: true,
+        targetName: true,
+        details: true,
+        createdAt: true,
+      },
+    }),
   ])
 
   return (
@@ -115,12 +131,6 @@ export default async function SettingsPage() {
                 </div>
               </div>
             </div>
-
-            {/* Autenticación de Dos Factores */}
-            <TwoFactorSettings
-              initialEnabled={user.twoFactorEnabled}
-              userId={user.id}
-            />
 
             {/* Secciones de Configuración */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mt-6 lg:mt-8">
@@ -203,6 +213,56 @@ export default async function SettingsPage() {
                   </button>
                 </div>
               </div>
+
+              <div className="bg-gray-50 dark:bg-slate-800 rounded-lg shadow border border-gray-200 dark:border-slate-700 lg:col-span-2">
+                <div className="p-4 lg:p-6 border-b border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center space-x-3">
+                    <Archive className="h-5 w-5 lg:h-6 lg:w-6 text-orange-600" />
+                    <h2 className="text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Papelera (Soft Delete)</h2>
+                  </div>
+                </div>
+                <div className="p-4 lg:p-6 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-900/20 px-4 py-3">
+                      <p className="text-xs uppercase tracking-wide text-orange-700 dark:text-orange-300">Usuarios internos eliminados</p>
+                      <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{softDeleteStats[0]}</p>
+                    </div>
+                    <div className="rounded-lg border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-900/20 px-4 py-3">
+                      <p className="text-xs uppercase tracking-wide text-orange-700 dark:text-orange-300">Usuarios WordPress eliminados</p>
+                      <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{softDeleteStats[1]}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Ultimos eliminados (historial)</p>
+                    {recentSoftDeletes.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No hay eliminaciones registradas.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {recentSoftDeletes.map((entry) => {
+                          const details = (entry.details || {}) as Record<string, any>
+                          const entity = details.entity || 'USER'
+                          return (
+                            <div key={entry.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-900/40">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                  {entry.targetName || entry.targetEmail}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                  {entry.targetEmail} - {entity}
+                                </p>
+                              </div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-3">
+                                {new Date(entry.createdAt).toLocaleString('es-MX')}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="mt-6 lg:mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
@@ -216,3 +276,5 @@ export default async function SettingsPage() {
     </div>
   )
 }
+
+

@@ -1,11 +1,12 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
 import WordPressStudentsClient from '@/components/wordpress/WordPressStudentsClient'
-import { Users } from 'lucide-react'
+import { UserPlus, Users } from 'lucide-react'
 
 export const metadata = {
   title: 'Usuarios WordPress | Tickets LICEO MICHOACANO',
@@ -59,7 +60,8 @@ export default async function WordPressStudentsPage() {
           <div className="p-4 lg:p-8">
             {/* Header */}
             <div className="mb-6 lg:mb-8">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
                   <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
@@ -71,6 +73,14 @@ export default async function WordPressStudentsPage() {
                     Gestiona usuarios de WordPress y Tutor LMS
                   </p>
                 </div>
+                </div>
+                <Link
+                  href="/dashboard/wordpress/enroll"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Enrolamiento
+                </Link>
               </div>
             </div>
 

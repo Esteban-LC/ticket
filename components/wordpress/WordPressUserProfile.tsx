@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Mail, User, Calendar, Shield, Lock, Unlock,
@@ -33,6 +33,14 @@ interface TutorCourse {
   status: string
   link: string
   date: string
+  relations?: string[]
+  lesson_total?: number
+  lesson_completed?: number
+  quiz_total?: number
+  quiz_completed?: number
+  assignment_total?: number
+  assignment_completed?: number
+  progress_percentage?: number
 }
 
 interface WooOrder {
@@ -169,6 +177,30 @@ export default function WordPressUserProfile({ userId, userRole, userPermissions
 
   const getOrderStatusColor = (s: string) =>
     ({ pending: 'bg-yellow-100 text-yellow-700', processing: 'bg-blue-100 text-blue-700', completed: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-700', refunded: 'bg-purple-100 text-purple-700', failed: 'bg-red-100 text-red-700', 'on-hold': 'bg-orange-100 text-orange-700' }[s] || 'bg-gray-100 text-gray-600')
+
+  const courseStats = useMemo(() => {
+    const enrolled = courses.filter(c => c.relations?.includes('enrolled')).length
+    const latestDate = courses.length > 0
+      ? [...courses]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.date
+      : null
+    const avgProgress = courses.length > 0
+      ? Math.round(courses.reduce((acc, c) => acc + (c.progress_percentage || 0), 0) / courses.length)
+      : 0
+
+    return {
+      total: courses.length,
+      enrolled,
+      latestDate,
+      avgProgress,
+    }
+  }, [courses])
+
+  const getCourseStatusLabel = (status: string) =>
+    ({ publish: 'Publicado', draft: 'Borrador', pending: 'Pendiente', private: 'Privado' }[status] || status)
+
+  const getCourseStatusColor = (status: string) =>
+    ({ publish: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', draft: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', private: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300' }[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300')
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[50vh]">
@@ -363,7 +395,85 @@ export default function WordPressUserProfile({ userId, userRole, userPermissions
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Sin cursos inscritos</p>
                 </div>
               ) : (
-                <ul className="divide-y divide-gray-100 dark:divide-slate-700">
+                <>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/40 p-2.5">
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">Total cursos</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">{courseStats.total}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/40 p-2.5">
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">Inscritos</p>
+                      <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">{courseStats.enrolled}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/40 p-2.5">
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">Promedio progreso</p>
+                      <p className="text-lg font-semibold text-blue-700 dark:text-blue-300">{courseStats.avgProgress}%</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/40 p-2.5">
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">Ultimo movimiento</p>
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white mt-1">{formatDate(courseStats.latestDate)}</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-slate-700/50">
+                        <tr>
+                          <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-300 px-3 py-2">Curso</th>
+                          <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-300 px-3 py-2">Enroll Date</th>
+                          <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-300 px-3 py-2">Lesson</th>
+                          <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-300 px-3 py-2">Quiz</th>
+                          <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-300 px-3 py-2">Assignment</th>
+                          <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-300 px-3 py-2">Progress</th>
+                          <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-300 px-3 py-2">Accion</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                        {courses.map(course => (
+                          <tr key={course.id} className="hover:bg-gray-50/70 dark:hover:bg-slate-700/20">
+                            <td className="px-3 py-2.5">
+                              <div className="min-w-0">
+                                <p className="font-medium text-gray-900 dark:text-white truncate"
+                                  dangerouslySetInnerHTML={{ __html: course.title?.rendered || 'Sin titulo' }} />
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="text-[11px] text-gray-400">ID #{course.id}</p>
+                                  <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-medium ${getCourseStatusColor(course.status)}`}>
+                                    {getCourseStatusLabel(course.status)}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{formatDate(course.date)}</td>
+                            <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{(course.lesson_completed ?? 0)}/{(course.lesson_total ?? 0)}</td>
+                            <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{(course.quiz_completed ?? 0)}/{(course.quiz_total ?? 0)}</td>
+                            <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{(course.assignment_completed ?? 0)}/{(course.assignment_total ?? 0)}</td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-2 min-w-[120px]">
+                                <div className="h-1.5 w-24 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.max(0, Math.min(100, course.progress_percentage ?? 0))}%` }} />
+                                </div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">{course.progress_percentage ?? 0}%</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <a href={course.link} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                                Ver curso
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/15 px-3 py-2">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      Fuente de datos: endpoint custom <span className="font-semibold">/custom/v1/users/{'{id}'}/courses</span> + rutas Tutor LMS para progreso y contenidos.
+                    </p>
+                  </div>
+                </div>
+                <ul className="hidden divide-y divide-gray-100 dark:divide-slate-700">
                   {courses.map(course => (
                     <li key={course.id} className="flex items-center gap-3 py-2.5">
                       <div className="h-8 w-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -377,6 +487,7 @@ export default function WordPressUserProfile({ userId, userRole, userPermissions
                     </li>
                   ))}
                 </ul>
+                </>
               )}
             </div>
           )}
@@ -453,6 +564,10 @@ export default function WordPressUserProfile({ userId, userRole, userPermissions
         loadingMessage="Suspendiendo usuario en WordPress..."
         successMessage="Usuario suspendido correctamente"
         required
+        requireTextConfirmation
+        confirmationText="SUSPENDER"
+        confirmationLabel="Para evitar errores, escribe SUSPENDER para confirmar."
+        confirmationPlaceholder="SUSPENDER"
       />
       <ActionDialog
         isOpen={showUnsuspendDialog}
@@ -477,6 +592,10 @@ export default function WordPressUserProfile({ userId, userRole, userPermissions
         variant="danger"
         loadingMessage="Eliminando usuario de WordPress..."
         successMessage="Usuario eliminado correctamente"
+        requireTextConfirmation
+        confirmationText="ELIMINAR"
+        confirmationLabel="Esta accion es irreversible. Escribe ELIMINAR para confirmar."
+        confirmationPlaceholder="ELIMINAR"
       />
 
       <EditUserModal

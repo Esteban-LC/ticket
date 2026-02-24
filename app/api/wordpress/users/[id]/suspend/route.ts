@@ -27,19 +27,16 @@ export async function POST(
     const wordpressUserId = parseInt(params.id)
     const { reason } = await request.json()
 
-    // Obtener info del usuario actual
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email || '' }
+    const currentUser = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null }
     })
 
     if (!currentUser) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
-    // 1. Obtener información del usuario de WordPress
     const wpUserData = await wpUserService.getUser(wordpressUserId)
 
-    // 2. Suspender en WordPress usando el custom endpoint
     let wpResponse
     try {
       wpResponse = await wpUserService.suspendUser(wordpressUserId, reason)
@@ -51,17 +48,15 @@ export async function POST(
         }, { status: 500 })
       }
     } catch (wpError: any) {
-      // Si falla, verificar si es porque el plugin no está instalado
       if (wpError.message?.includes('404') || wpError.message?.includes('not found')) {
         return NextResponse.json({
-          error: 'El plugin de suspensión no está instalado en WordPress. Por favor, instala el código personalizado primero.',
+          error: 'El plugin de suspension no esta instalado en WordPress. Instala el codigo personalizado primero.',
           installationRequired: true
         }, { status: 424 })
       }
       throw wpError
     }
 
-    // 3. Crear o actualizar registro local (para tracking adicional)
     const wpUser = await prisma.wordPressUser.upsert({
       where: { id: wordpressUserId },
       create: {
@@ -72,17 +67,21 @@ export async function POST(
         isSuspended: true,
         suspendedBy: currentUser.id,
         suspendedAt: new Date(),
-        suspensionReason: reason || 'Sin razón especificada',
+        suspensionReason: reason || 'Sin razon especificada',
+        deletedAt: null,
       },
       update: {
+        email: wpUserData.email || undefined,
+        username: wpUserData.username || undefined,
+        name: wpUserData.name || undefined,
         isSuspended: true,
         suspendedBy: currentUser.id,
         suspendedAt: new Date(),
-        suspensionReason: reason || 'Sin razón especificada',
+        suspensionReason: reason || 'Sin razon especificada',
+        deletedAt: null,
       },
     })
 
-    // 4. Registrar acción en AdminLog
     await prisma.adminLog.create({
       data: {
         action: 'SUSPEND_USER',
@@ -134,19 +133,16 @@ export async function DELETE(
 
     const wordpressUserId = parseInt(params.id)
 
-    // Obtener info del usuario actual
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email || '' }
+    const currentUser = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null }
     })
 
     if (!currentUser) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
-    // 1. Obtener información del usuario de WordPress
     const wpUserData = await wpUserService.getUser(wordpressUserId)
 
-    // 2. Habilitar en WordPress usando el custom endpoint
     let wpResponse
     try {
       wpResponse = await wpUserService.unsuspendUser(wordpressUserId)
@@ -158,28 +154,40 @@ export async function DELETE(
         }, { status: 500 })
       }
     } catch (wpError: any) {
-      // Si falla, verificar si es porque el plugin no está instalado
       if (wpError.message?.includes('404') || wpError.message?.includes('not found')) {
         return NextResponse.json({
-          error: 'El plugin de suspensión no está instalado en WordPress. Por favor, instala el código personalizado primero.',
+          error: 'El plugin de suspension no esta instalado en WordPress. Instala el codigo personalizado primero.',
           installationRequired: true
         }, { status: 424 })
       }
       throw wpError
     }
 
-    // 3. Actualizar registro local
-    const wpUser = await prisma.wordPressUser.update({
+    const wpUser = await prisma.wordPressUser.upsert({
       where: { id: wordpressUserId },
-      data: {
+      create: {
+        id: wordpressUserId,
+        email: wpUserData.email || `wp_user_${wordpressUserId}@temp.local`,
+        username: wpUserData.username || null,
+        name: wpUserData.name || null,
         isSuspended: false,
         suspendedBy: null,
         suspendedAt: null,
         suspensionReason: null,
+        deletedAt: null,
+      },
+      update: {
+        email: wpUserData.email || undefined,
+        username: wpUserData.username || undefined,
+        name: wpUserData.name || undefined,
+        isSuspended: false,
+        suspendedBy: null,
+        suspendedAt: null,
+        suspensionReason: null,
+        deletedAt: null,
       },
     })
 
-    // 4. Registrar acción en AdminLog
     await prisma.adminLog.create({
       data: {
         action: 'UNSUSPEND_USER',

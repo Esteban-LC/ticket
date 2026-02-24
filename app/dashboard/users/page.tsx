@@ -54,7 +54,6 @@ export default async function UsersPage({
         email: true,
         avatar: true,
         role: true,
-        phone: true,
         permissions: true,
         createdAt: true,
         department: {

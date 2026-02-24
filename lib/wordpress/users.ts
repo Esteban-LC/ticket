@@ -48,6 +48,29 @@ export interface UpdateUserData {
   locale?: string
 }
 
+export interface BatchResultItem {
+  user_id?: number
+  index?: number
+  success: boolean
+  code?: string | null
+  message: string
+  status: number
+  generated_password?: string
+  username?: string
+  email?: string
+  role?: string
+}
+
+export interface BatchResponse {
+  success: boolean
+  summary: {
+    requested: number
+    successful: number
+    failed: number
+  }
+  results: BatchResultItem[]
+}
+
 export class WordPressUserService {
   /**
    * Obtener todos los usuarios
@@ -70,6 +93,25 @@ export class WordPressUserService {
     }
 
     return wpClient.get<WordPressUser[]>('/wp/v2/users', queryParams)
+  }
+
+  /**
+   * Obtener total de usuarios (X-WP-Total)
+   */
+  async getUsersCount(params?: {
+    search?: string
+    roles?: string[]
+  }): Promise<number> {
+    const queryParams: Record<string, any> = {
+      ...params,
+      context: 'edit',
+    }
+
+    if (params?.roles && params.roles.length > 0) {
+      queryParams.roles = params.roles.join(',')
+    }
+
+    return wpClient.getCount('/wp/v2/users', queryParams)
   }
 
   /**
@@ -188,6 +230,38 @@ export class WordPressUserService {
     suspended_by: number | null
   }> {
     return wpClient.get(`/custom/v1/users/${userId}/suspension-status`)
+  }
+
+  async suspendUsersBatch(userIds: number[], reason?: string): Promise<BatchResponse> {
+    return wpClient.post('/custom/v1/users/batch/suspend', {
+      user_ids: userIds,
+      reason: reason || '',
+    })
+  }
+
+  async unsuspendUsersBatch(userIds: number[]): Promise<BatchResponse> {
+    return wpClient.post('/custom/v1/users/batch/unsuspend', {
+      user_ids: userIds,
+    })
+  }
+
+  async deleteUsersBatch(userIds: number[], reassign?: number): Promise<BatchResponse> {
+    const payload: Record<string, any> = { user_ids: userIds }
+    if (typeof reassign === 'number' && reassign > 0) {
+      payload.reassign = reassign
+    }
+    return wpClient.post('/custom/v1/users/batch/delete', payload)
+  }
+
+  async createUsersBatch(users: Array<{
+    username: string
+    email: string
+    role?: string
+    first_name?: string
+    last_name?: string
+    password?: string
+  }>): Promise<BatchResponse> {
+    return wpClient.post('/custom/v1/users/batch/create', { users })
   }
 }
 

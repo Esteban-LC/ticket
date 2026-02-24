@@ -15,8 +15,7 @@ import {
   Layout,
   Building2,
   Eye,
-  GraduationCap,
-  BookOpen,
+  UserPlus,
   ShoppingCart,
 } from 'lucide-react'
 import { useSidebar } from '@/contexts/SidebarContext'
@@ -56,6 +55,8 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
     { name: 'Configuración', href: '/dashboard/settings', icon: Settings, roles: ['ADMIN'], section: 'admin' },
     // === Sección WordPress LMS ===
     { name: 'Usuarios WP', href: '/dashboard/wordpress/students', icon: Users, roles: ['ADMIN'], section: 'wordpress', permission: 'wordpress:access' },
+    { name: 'Enrolamiento', href: '/dashboard/wordpress/enroll', icon: UserPlus, roles: ['ADMIN'], section: 'wordpress', permission: 'wordpress:access' },
+    { name: 'Pedidos WP', href: '/dashboard/wordpress/orders', icon: ShoppingCart, roles: ['ADMIN'], section: 'wordpress', permission: 'wordpress:access' },
   ]
 
   // Filtrar navegación por rol y permisos

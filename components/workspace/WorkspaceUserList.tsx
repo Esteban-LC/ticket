@@ -22,6 +22,8 @@ interface WorkspaceUser {
   creationTime: string
   lastLoginTime: string
   thumbnailPhotoUrl?: string
+  hasWordPressUser?: boolean
+  wordPressSuspended?: boolean
 }
 
 interface WorkspaceUserListProps {
@@ -30,6 +32,8 @@ interface WorkspaceUserListProps {
   onEdit: (user: WorkspaceUser) => void
   onSuspend: (user: WorkspaceUser) => void
   onDelete: (user: WorkspaceUser) => void
+  onSelect: (user: WorkspaceUser) => void
+  selectedUserEmail?: string | null
 }
 
 function formatDate(dateStr: string) {
@@ -77,6 +81,8 @@ export default function WorkspaceUserList({
   onEdit,
   onSuspend,
   onDelete,
+  onSelect,
+  selectedUserEmail,
 }: WorkspaceUserListProps) {
   if (loading) {
     return (
@@ -128,7 +134,15 @@ export default function WorkspaceUserList({
           </thead>
           <tbody className="divide-y dark:divide-slate-700">
             {users.map((user) => (
-              <tr key={user.id || user.primaryEmail} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition">
+              <tr
+                key={user.id || user.primaryEmail}
+                onClick={() => onSelect(user)}
+                className={`transition cursor-pointer ${
+                  selectedUserEmail === user.primaryEmail
+                    ? 'bg-blue-50 dark:bg-blue-900/20'
+                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/30'
+                }`}
+              >
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
                     <UserAvatar user={user} />
@@ -176,14 +190,20 @@ export default function WorkspaceUserList({
                 <td className="px-6 py-4">
                   <div className="flex items-center justify-end gap-1">
                     <button
-                      onClick={() => onEdit(user)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEdit(user)
+                      }}
                       className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
                       title="Editar"
                     >
                       <Edit3 className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => onSuspend(user)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onSuspend(user)
+                      }}
                       className={`p-2 rounded-lg transition ${
                         user.suspended
                           ? 'text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
@@ -198,7 +218,10 @@ export default function WorkspaceUserList({
                       )}
                     </button>
                     <button
-                      onClick={() => onDelete(user)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDelete(user)
+                      }}
                       className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
                       title="Eliminar"
                     >
@@ -215,7 +238,13 @@ export default function WorkspaceUserList({
       {/* Mobile Cards */}
       <div className="lg:hidden divide-y dark:divide-slate-700">
         {users.map((user) => (
-          <div key={user.id || user.primaryEmail} className="p-4">
+          <div
+            key={user.id || user.primaryEmail}
+            className={`p-4 cursor-pointer transition ${
+              selectedUserEmail === user.primaryEmail ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+            }`}
+            onClick={() => onSelect(user)}
+          >
             <div className="flex items-center gap-3">
               <UserAvatar user={user} />
               <div className="flex-1 min-w-0">
@@ -253,13 +282,19 @@ export default function WorkspaceUserList({
 
             <div className="mt-3 flex items-center gap-2 border-t dark:border-slate-700 pt-3">
               <button
-                onClick={() => onEdit(user)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit(user)
+                }}
                 className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
               >
                 <Edit3 className="h-3 w-3" /> Editar
               </button>
               <button
-                onClick={() => onSuspend(user)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSuspend(user)
+                }}
                 className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
                   user.suspended
                     ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
@@ -269,7 +304,10 @@ export default function WorkspaceUserList({
                 {user.suspended ? <><PlayCircle className="h-3 w-3" /> Activar</> : <><PauseCircle className="h-3 w-3" /> Suspender</>}
               </button>
               <button
-                onClick={() => onDelete(user)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(user)
+                }}
                 className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition"
               >
                 <Trash2 className="h-3 w-3" /> Eliminar

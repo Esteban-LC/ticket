@@ -44,6 +44,7 @@ model User {
   twoFactorSecret    String?
   permissions        String[]      @default([])
   organizationId     String?
+  deletedAt          DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   adminLogs          AdminLog[]
@@ -54,11 +55,19 @@ model User {
   createdTickets     Ticket[]      @relation("CreatedTickets")
   agendaItems        AgendaItem[]  @relation("UserAgendaItems")
   resultItems        ResultItem[]  @relation("UserResultItems")
+  reports            Report[]
   department         Department?   @relation(fields: [departmentId], references: [id])
   organization       Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([role])
   @@index([departmentId])
+  @@index([deletedAt])
+  @@index([name]) // Índice para búsqueda por nombre
+  @@index([email]) // Índice para búsqueda por email (además del unique)
+  @@index([createdAt]) // Índice para ordenamiento por fecha
+  @@index([organizationId])
+  // Índice compuesto para búsquedas más eficientes
+  @@index([deletedAt, role, departmentId])
 }
 
 model Ticket {
@@ -278,6 +287,24 @@ enum AdminAction {
   UNSUSPEND_USER
 }
 
+model Report {
+  id          String   @id @default(cuid())
+  name        String
+  date        String
+  type        String
+  status      String   @default("Disponible")
+  size        String   @default("-")
+  url         String?
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
 model WordPressUser {
   id               Int       @id // ID del usuario en WordPress
   email            String    @unique
@@ -288,9 +315,11 @@ model WordPressUser {
   suspendedAt      DateTime?
   suspensionReason String?
   notes            String?   // Notas adicionales sobre el usuario
+  deletedAt        DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@index([email])
   @@index([isSuspended])
+  @@index([deletedAt])
 }

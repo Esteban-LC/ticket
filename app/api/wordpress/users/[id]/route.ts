@@ -28,7 +28,9 @@ export async function GET(
     const user = await wpUserService.getUser(userId)
 
     // Merge con estado de suspensión local
-    const localUser = await prisma.wordPressUser.findUnique({ where: { id: userId } })
+    const localUser = await prisma.wordPressUser.findFirst({
+      where: { id: userId, deletedAt: null },
+    })
 
     return NextResponse.json({
       user: {
@@ -109,6 +111,51 @@ export async function DELETE(
       : undefined
 
     const result = await wpUserService.deleteUser(userId, reassign)
+
+    const currentUser = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
+      select: { id: true, email: true },
+    })
+
+    const localUser = await prisma.wordPressUser.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true, email: true, name: true },
+    })
+
+    if (localUser) {
+      const deletedSuffix = Date.now()
+      const tombstoneEmail = `deleted+${deletedSuffix}.${localUser.id}@wp-deleted.local`
+
+      await prisma.wordPressUser.update({
+        where: { id: localUser.id },
+        data: {
+          deletedAt: new Date(),
+          email: tombstoneEmail,
+          isSuspended: false,
+          suspendedBy: null,
+          suspendedAt: null,
+          suspensionReason: null,
+        },
+      })
+
+      if (currentUser) {
+        await prisma.adminLog.create({
+          data: {
+            action: 'DELETE_USER',
+            adminId: currentUser.id,
+            adminEmail: currentUser.email,
+            targetEmail: localUser.email,
+            targetName: localUser.name || null,
+            details: {
+              softDelete: true,
+              entity: 'WORDPRESS_USER',
+              wordPressUserId: localUser.id,
+              tombstoneEmail,
+            },
+          },
+        })
+      }
+    }
 
     return NextResponse.json({ success: true, result })
   } catch (error: any) {
