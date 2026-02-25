@@ -4,7 +4,7 @@
  * Plugin URI: https://liq.com.mx
  * Description: Agrega endpoints REST API para suspender/habilitar usuarios y previene que usuarios suspendidos inicien sesión en WordPress.
  * Version: 1.0.0
- * Author: Paco
+ * Author: TebanLuc
  * Author URI: https://liq.com.mx
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -1387,6 +1387,99 @@ function custom_get_user_courses($request) {
     });
 
     return array('courses' => $courses);
+}
+
+/**
+ * Get students enrolled in a specific course (Tutor LMS)
+ */
+add_action('rest_api_init', function () {
+    register_rest_route('custom/v1', '/courses/(?P<id>\d+)/students', array(
+        'methods' => 'GET',
+        'callback' => 'custom_get_course_students',
+        'permission_callback' => function () {
+            return current_user_can('edit_users');
+        },
+        'args' => array(
+            'id' => array(
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && intval($param) > 0;
+                }
+            ),
+            'page' => array(
+                'required' => false,
+                'sanitize_callback' => function ($param) {
+                    return max(1, intval($param ?: 1));
+                }
+            ),
+            'per_page' => array(
+                'required' => false,
+                'sanitize_callback' => function ($param) {
+                    return max(1, min(100, intval($param ?: 50)));
+                }
+            ),
+        ),
+    ));
+});
+
+function custom_get_course_students($request) {
+    global $wpdb;
+
+    $course_id = intval($request['id']);
+    $page      = max(1, intval($request->get_param('page') ?: 1));
+    $per_page  = max(1, min(100, intval($request->get_param('per_page') ?: 50)));
+    $offset    = ($page - 1) * $per_page;
+
+    $course = get_post($course_id);
+    if (!$course || $course->post_type !== 'courses') {
+        return new WP_Error('course_not_found', 'Curso no encontrado', array('status' => 404));
+    }
+
+    // Count total enrolled students
+    $total = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(DISTINCT post_author)
+         FROM {$wpdb->posts}
+         WHERE post_type = 'tutor_enrolled'
+           AND post_parent = %d
+           AND post_status = 'completed'",
+        $course_id
+    ));
+
+    // Get paginated enrolled user IDs
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT DISTINCT post_author AS user_id
+         FROM {$wpdb->posts}
+         WHERE post_type = 'tutor_enrolled'
+           AND post_parent = %d
+           AND post_status = 'completed'
+         ORDER BY post_date DESC
+         LIMIT %d OFFSET %d",
+        $course_id,
+        $per_page,
+        $offset
+    ));
+
+    $students = array();
+    foreach ($rows as $row) {
+        $user = get_userdata(intval($row->user_id));
+        if (!$user) {
+            continue;
+        }
+        $students[] = array(
+            'id'           => $user->ID,
+            'user_login'   => $user->user_login,
+            'display_name' => $user->display_name,
+            'user_email'   => $user->user_email,
+        );
+    }
+
+    return array(
+        'students'  => $students,
+        'course_id' => $course_id,
+        'total'     => $total,
+        'page'      => $page,
+        'per_page'  => $per_page,
+        'has_more'  => ($offset + $per_page) < $total,
+    );
 }
 
 /**

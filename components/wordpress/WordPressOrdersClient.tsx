@@ -11,6 +11,12 @@ interface LineItem {
   total: string
 }
 
+interface FeeLine {
+  id: number
+  name: string
+  total: string
+}
+
 interface Order {
   id: number
   number: string
@@ -20,6 +26,8 @@ interface Order {
   currency_symbol: string
   customer_id: number
   line_items: LineItem[]
+  fee_lines?: FeeLine[]
+  customer_note?: string
 }
 
 interface Props {
@@ -296,11 +304,14 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           Cliente #{order.customer_id} · {formatDate(order.date_created)}
                         </p>
-                        {order.line_items?.length > 0 && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {order.line_items.map((i) => i.name).join(', ')}
-                          </p>
-                        )}
+                        {(() => {
+                          const items = [...(order.line_items || []), ...(order.fee_lines || [])]
+                          return items.length > 0 ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {items.map((i) => i.name).join(', ')}
+                            </p>
+                          ) : null
+                        })()}
                       </div>
                     </div>
 

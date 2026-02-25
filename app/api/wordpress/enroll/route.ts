@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { tutorLMSService } from '@/lib/wordpress/tutor-lms'
+import { wooCommerceService } from '@/lib/wordpress/woocommerce'
 
 /**
  * POST /api/wordpress/enroll
@@ -38,12 +39,35 @@ export async function POST(request: NextRequest) {
 
     // Modo: un usuario -> múltiples cursos
     if (user_id && course_ids.length > 0) {
-      const result = await tutorLMSService.enrollStudentInCoursesBatch(user_id, course_ids, {
-        skipOrderCheck: skip_order_check,
+      const courseNamesFromBody: { id: number; name: string }[] = Array.isArray(body.course_names)
+        ? body.course_names.map((c: any) => ({
+            id: Number(c.id || 0),
+            name: String(c.name || c.title || `Curso #${c.id || '?'}`),
+          }))
+        : course_ids.map((id: number) => ({ id, name: `Curso #${id}` }))
+
+      const order = await wooCommerceService.createEnrollmentOrder({
+        customer_id: user_id,
+        courses: courseNamesFromBody,
       })
 
-      const failed = Number(result?.summary?.failed || 0)
-      return NextResponse.json(result, { status: failed > 0 ? 207 : 201 })
+      return NextResponse.json({
+        success: true,
+        order_id: order.id,
+        user_id,
+        summary: {
+          requested: course_ids.length,
+          enrolled: course_ids.length,
+          already_enrolled: 0,
+          failed: 0,
+        },
+        results: course_ids.map((id) => ({
+          course_id: id,
+          success: true,
+          message: 'Pedido pendiente creado',
+          already_enrolled: false,
+        })),
+      }, { status: 201 })
     }
 
     if (!course_id || (!user_id && user_ids.length === 0)) {
@@ -60,19 +84,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Modo masivo
+    const courseTitleForOrder = (body.course_title as string | undefined) || `Curso #${course_id}`
     const targets: number[] = user_ids.length > 0 ? user_ids : (user_id ? [user_id] : [])
     const uniqueTargets: number[] = Array.from(new Set<number>(targets))
-    const results: Array<{ user_id: number; success: boolean; error?: string }> = []
+    const results: Array<{ user_id: number; success: boolean; order_id?: number; error?: string }> = []
 
     for (const targetUserId of uniqueTargets) {
       try {
-        await tutorLMSService.enrollStudent(targetUserId, course_id, { skipOrderCheck: skip_order_check })
-        results.push({ user_id: targetUserId, success: true })
+        const order = await wooCommerceService.createEnrollmentOrder({
+          customer_id: targetUserId,
+          courses: [{ id: course_id, name: courseTitleForOrder }],
+        })
+        results.push({
+          user_id: targetUserId,
+          success: true,
+          order_id: order.id,
+        })
       } catch (error: any) {
         results.push({
           user_id: targetUserId,
           success: false,
-          error: error.message || 'Error al matricular',
+          error: error.message || 'Error al crear pedido',
         })
       }
     }

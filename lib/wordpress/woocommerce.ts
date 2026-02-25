@@ -305,6 +305,34 @@ export class WooCommerceService {
   }
 
   /**
+   * Crear un pedido de enrolamiento administrativo (sin product_id, usa fee_lines)
+   */
+  async createEnrollmentOrder(data: {
+    customer_id: number
+    courses: { id?: number; name: string }[]
+    note?: string
+  }): Promise<WooCommerceOrder> {
+    const courseIds = data.courses
+      .map((c) => c.id)
+      .filter((id): id is number => Boolean(id))
+    return wpClient.post<WooCommerceOrder>('/wc/v3/orders', {
+      customer_id: data.customer_id,
+      status: 'pending',
+      payment_method: 'manual',
+      payment_method_title: 'Enrolamiento administrativo',
+      fee_lines: data.courses.map((c) => ({
+        name: c.name,
+        total: '0',
+      })),
+      customer_note: data.note || 'Enrolamiento administrativo — pendiente de verificación de pago',
+      meta_data: [
+        { key: '_liq_course_ids', value: courseIds.join(',') },
+        { key: '_liq_enrollment_pending', value: '1' },
+      ],
+    })
+  }
+
+  /**
    * Obtener estadísticas de ventas
    */
   async getSalesStats(params?: {

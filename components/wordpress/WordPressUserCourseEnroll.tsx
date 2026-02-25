@@ -2,6 +2,7 @@
 
 import { KeyboardEvent, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, GraduationCap, RefreshCw, Search, User, Users } from 'lucide-react'
+import type { RecentEnrollment } from './WordPressEnrollHub'
 
 interface WordPressUser {
   id: number
@@ -42,11 +43,12 @@ interface BatchEnrollResponse {
 interface Props {
   userRole: string
   userPermissions: string[]
+  onEnrollSuccess?: (entry: Omit<RecentEnrollment, 'id'>) => void
 }
 
 const USERS_PER_PAGE = 25
 
-export default function WordPressUserCourseEnroll({ userRole, userPermissions }: Props) {
+export default function WordPressUserCourseEnroll({ userRole, userPermissions, onEnrollSuccess }: Props) {
   const canEnroll =
     userRole === 'ADMIN' ||
     userPermissions.includes('wordpress:manage_users') ||
@@ -71,6 +73,7 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions }:
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<BatchEnrollResponse | null>(null)
   const [searchStarted, setSearchStarted] = useState(false)
+  const [enrolledUserIds, setEnrolledUserIds] = useState<Set<number>>(new Set())
 
   const stripHtml = (value: string) => value.replace(/<[^>]+>/g, '').trim()
 
@@ -196,12 +199,19 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions }:
       setError(null)
       setResult(null)
 
+      const courseNames = selectedCourseIds.map((id) => {
+        const c = courses.find((c) => c.id === id)
+        return { id, name: stripHtml(c?.title?.rendered || `Curso #${id}`) }
+      })
+
       const res = await fetch('/api/wordpress/enroll', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: selectedUserId,
           course_ids: selectedCourseIds,
+          skip_order_check: true,
+          course_names: courseNames,
         }),
       })
       const data = await res.json()
@@ -211,6 +221,21 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions }:
 
       setResult(data)
       setSelectedCourseIds([])
+
+      if (selectedUser && data.success) {
+        setEnrolledUserIds((prev) => new Set([...prev, selectedUser.id]))
+        onEnrollSuccess?.({
+          userId: selectedUser.id,
+          userName: selectedUser.name || `Usuario #${selectedUser.id}`,
+          userEmail: selectedUser.email,
+          courses: selectedCourseIds.map((id) => {
+            const c = courses.find((c) => c.id === id)
+            return { id, title: stripHtml(c?.title?.rendered || `Curso #${id}`) }
+          }),
+          enrolledAt: new Date().toISOString(),
+          withoutPayment: true,
+        })
+      }
     } catch (e: any) {
       setError(e.message || 'Error al enrolar cursos')
     } finally {
@@ -354,7 +379,15 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions }:
                         : 'hover:bg-gray-50 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{user.name || `Usuario #${user.id}`}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{user.name || `Usuario #${user.id}`}</p>
+                      {enrolledUserIds.has(user.id) && (
+                        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                          <GraduationCap className="h-3 w-3" />
+                          Enrolado
+                        </span>
+                      )}
+                    </div>
                     <p className="truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
                   </button>
                 </li>
