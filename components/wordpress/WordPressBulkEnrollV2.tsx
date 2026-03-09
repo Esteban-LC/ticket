@@ -56,8 +56,6 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
-  const [totalFiltered, setTotalFiltered] = useState(0)
-  const [totalGlobal, setTotalGlobal] = useState(0)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -112,8 +110,6 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
         if (!res.ok) throw new Error(data.error || 'Error al cargar usuarios')
         setUsers(data.users || [])
         setHasMore(Boolean(data.pagination?.has_more))
-        setTotalFiltered(Number(data.pagination?.total_filtered ?? data.pagination?.total ?? 0))
-        setTotalGlobal(Number(data.pagination?.total_global ?? data.pagination?.total ?? 0))
         setSelectedUserIds([])
       } catch (e: any) {
         setError(e.message || 'Error al cargar usuarios')
@@ -405,11 +401,11 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
         <div className="flex flex-col gap-2 border-b border-gray-200 p-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-gray-500" />
-            <p className="text-sm font-medium text-gray-900 dark:text-white">Usuarios ({totalGlobal})</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Usuarios</p>
             {searchTerm ? (
-              <p className="text-xs text-gray-500 dark:text-gray-400">Mostrando {users.length} de {totalFiltered} filtrados</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Mostrando {users.length} resultados en esta pagina</p>
             ) : (
-              <p className="text-xs text-gray-500 dark:text-gray-400">Mostrando {users.length} de {totalGlobal}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Mostrando {users.length} usuarios en esta pagina</p>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">

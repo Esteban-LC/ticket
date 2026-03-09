@@ -29,6 +29,7 @@ interface WorkspaceUser {
 interface WorkspaceUserListProps {
   users: WorkspaceUser[]
   loading: boolean
+  canManage: boolean
   onEdit: (user: WorkspaceUser) => void
   onSuspend: (user: WorkspaceUser) => void
   onDelete: (user: WorkspaceUser) => void
@@ -52,16 +53,6 @@ function formatDate(dateStr: string) {
 function UserAvatar({ user }: { user: WorkspaceUser }) {
   const initials = `${user.name.givenName?.[0] || ''}${user.name.familyName?.[0] || ''}`.toUpperCase()
 
-  if (user.thumbnailPhotoUrl) {
-    return (
-      <img
-        src={user.thumbnailPhotoUrl}
-        alt={user.name.fullName}
-        className="h-10 w-10 rounded-full object-cover"
-      />
-    )
-  }
-
   const colors = [
     'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-500',
     'bg-yellow-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500',
@@ -78,6 +69,7 @@ function UserAvatar({ user }: { user: WorkspaceUser }) {
 export default function WorkspaceUserList({
   users,
   loading,
+  canManage,
   onEdit,
   onSuspend,
   onDelete,
@@ -127,9 +119,11 @@ export default function WorkspaceUserList({
               <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Creación
               </th>
-              <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Acciones
-              </th>
+              {canManage && (
+                <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Acciones
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y dark:divide-slate-700">
@@ -187,48 +181,50 @@ export default function WorkspaceUserList({
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                   {formatDate(user.creationTime)}
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center justify-end gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onEdit(user)
-                      }}
-                      className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
-                      title="Editar"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onSuspend(user)
-                      }}
-                      className={`p-2 rounded-lg transition ${
-                        user.suspended
-                          ? 'text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                          : 'text-gray-500 hover:text-amber-600 dark:text-gray-400 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                      }`}
-                      title={user.suspended ? 'Reactivar' : 'Suspender'}
-                    >
-                      {user.suspended ? (
-                        <PlayCircle className="h-4 w-4" />
-                      ) : (
-                        <PauseCircle className="h-4 w-4" />
-                      )}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onDelete(user)
-                      }}
-                      className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
-                      title="Eliminar"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
+                {canManage && (
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(user)
+                        }}
+                        className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                        title="Editar"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSuspend(user)
+                        }}
+                        className={`p-2 rounded-lg transition ${
+                          user.suspended
+                            ? 'text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                            : 'text-gray-500 hover:text-amber-600 dark:text-gray-400 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                        }`}
+                        title={user.suspended ? 'Reactivar' : 'Suspender'}
+                      >
+                        {user.suspended ? (
+                          <PlayCircle className="h-4 w-4" />
+                        ) : (
+                          <PauseCircle className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(user)
+                        }}
+                        className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -280,39 +276,41 @@ export default function WorkspaceUserList({
               </span>
             </div>
 
-            <div className="mt-3 flex items-center gap-2 border-t dark:border-slate-700 pt-3">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onEdit(user)
-                }}
-                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
-              >
-                <Edit3 className="h-3 w-3" /> Editar
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onSuspend(user)
-                }}
-                className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                  user.suspended
-                    ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
-                    : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
-                }`}
-              >
-                {user.suspended ? <><PlayCircle className="h-3 w-3" /> Activar</> : <><PauseCircle className="h-3 w-3" /> Suspender</>}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDelete(user)
-                }}
-                className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition"
-              >
-                <Trash2 className="h-3 w-3" /> Eliminar
-              </button>
-            </div>
+            {canManage && (
+              <div className="mt-3 flex items-center gap-2 border-t dark:border-slate-700 pt-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onEdit(user)
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
+                >
+                  <Edit3 className="h-3 w-3" /> Editar
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSuspend(user)
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
+                    user.suspended
+                      ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
+                      : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                  }`}
+                >
+                  {user.suspended ? <><PlayCircle className="h-3 w-3" /> Activar</> : <><PauseCircle className="h-3 w-3" /> Suspender</>}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(user)
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition"
+                >
+                  <Trash2 className="h-3 w-3" /> Eliminar
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

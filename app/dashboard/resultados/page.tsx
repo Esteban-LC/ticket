@@ -25,7 +25,19 @@ export default async function ResultsPage() {
     // Obtener usuario completo
     const user = await prisma.user.findUnique({
         where: { email: session.user.email || '' },
-        select: { id: true, name: true, email: true, role: true, permissions: true }
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            permissions: true,
+            department: {
+                select: {
+                    id: true,
+                    name: true,
+                }
+            }
+        }
     })
 
     if (!user) {

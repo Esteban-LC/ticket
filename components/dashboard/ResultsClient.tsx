@@ -7,12 +7,9 @@ import {
     Layout,
     Plus,
     MoreVertical,
-    CheckCircle2,
-    Clock,
     AlertCircle,
     Search,
     Filter,
-    Download,
     Loader2
 } from 'lucide-react'
 
@@ -28,27 +25,35 @@ interface ResultItem {
 }
 
 interface ResultsClientProps {
-    user: any
+    user: {
+        id: string
+        name?: string | null
+        email?: string
+        role?: string
+        permissions?: string[]
+        department?: {
+            id: string
+            name: string
+        } | null
+    }
     openTicketsCount: number
 }
 
 export default function ResultsClient({ user, openTicketsCount }: ResultsClientProps) {
     const canEdit = user?.role !== 'VIEWER'
+    const areaLabel = user?.department?.name || user?.name || 'Mi area'
     const [results, setResults] = useState<ResultItem[]>([])
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
-    // Modals State
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
-    // Selection State
     const [selectedItem, setSelectedItem] = useState<ResultItem | null>(null)
     const [itemToDelete, setItemToDelete] = useState<ResultItem | null>(null)
     const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-    // Form State
     const [formData, setFormData] = useState<Partial<ResultItem>>({
         product: '',
         project: '',
@@ -71,16 +76,33 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
         }
     }
 
-    useEffect(() => { fetchResults() }, [])
+    useEffect(() => {
+        fetchResults()
+    }, [])
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Entregado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-            case 'Completado': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-            case 'En proceso': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-            case 'Pausado': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+            case 'Entregado':
+                return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+            case 'Completado':
+                return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+            case 'En proceso':
+                return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+            case 'Pausado':
+                return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+            default:
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
         }
+    }
+
+    const resetForm = () => {
+        setFormData({
+            product: '',
+            project: '',
+            description: '',
+            status: 'En proceso',
+            observations: ''
+        })
     }
 
     const handleCreate = async (e: React.FormEvent) => {
@@ -101,7 +123,7 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
             if (res.ok) {
                 await fetchResults()
                 setIsCreateModalOpen(false)
-                setFormData({ product: '', project: '', description: '', status: 'En proceso', observations: '' })
+                resetForm()
             }
         } catch (error) {
             console.error('Error creating resultado:', error)
@@ -177,14 +199,9 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
     }
 
     const toggleMenu = (id: string) => {
-        if (openMenuId === id) {
-            setOpenMenuId(null)
-        } else {
-            setOpenMenuId(id)
-        }
+        setOpenMenuId((currentId) => (currentId === id ? null : id))
     }
 
-    // Close menu when clicking outside
     const handleBackdropClick = () => {
         if (openMenuId !== null) setOpenMenuId(null)
     }
@@ -198,7 +215,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
 
                 <main className="flex-1 overflow-y-auto">
                     <div className="p-4 lg:p-8">
-                        {/* Header Section */}
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
                             <div>
                                 <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -206,7 +222,7 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                                     Resultado Semestral
                                 </h1>
                                 <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
-                                    <p><span className="font-semibold text-gray-900 dark:text-gray-200">Área:</span> {user?.name || 'Mi área'}</p>
+                                    <p><span className="font-semibold text-gray-900 dark:text-gray-200">Area:</span> {areaLabel}</p>
                                     <p><span className="font-semibold text-gray-900 dark:text-gray-200">Total proyectos:</span> {results.length}</p>
                                 </div>
                             </div>
@@ -214,7 +230,7 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                                 <div className="flex gap-2 w-full lg:w-auto">
                                     <button
                                         onClick={() => {
-                                            setFormData({ product: '', project: '', description: '', status: 'En proceso', observations: '' })
+                                            resetForm()
                                             setIsCreateModalOpen(true)
                                         }}
                                         className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
@@ -226,7 +242,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                             )}
                         </div>
 
-                        {/* Filters */}
                         <div className="flex flex-col sm:flex-row gap-4 mb-6">
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -242,7 +257,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                             </button>
                         </div>
 
-                        {/* Loading State */}
                         {loading ? (
                             <div className="flex items-center justify-center py-20">
                                 <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
@@ -252,10 +266,10 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-12 text-center">
                                 <Layout className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Sin resultados</h3>
-                                <p className="text-gray-500 dark:text-gray-400 mb-4">No tienes proyectos registrados aún.</p>
+                                <p className="text-gray-500 dark:text-gray-400 mb-4">No tienes proyectos registrados aun.</p>
                                 <button
                                     onClick={() => {
-                                        setFormData({ product: '', project: '', description: '', status: 'En proceso', observations: '' })
+                                        resetForm()
                                         setIsCreateModalOpen(true)
                                     }}
                                     className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
@@ -265,7 +279,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                                 </button>
                             </div>
                         ) : (
-                            /* Table */
                             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-visible">
                                 <div className="overflow-x-auto overflow-y-visible">
                                     <table className="w-full text-left text-sm">
@@ -273,7 +286,7 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                                             <tr>
                                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white w-16">No.</th>
                                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white">Proyecto</th>
-                                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white lg:w-1/3">Descripción del Resultado</th>
+                                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white lg:w-1/3">Descripcion del Resultado</th>
                                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white">Estatus</th>
                                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white lg:w-1/4">Observaciones</th>
                                                 {canEdit && <th className="px-6 py-4 text-right">Acciones</th>}
@@ -305,7 +318,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                                                                 <MoreVertical className="h-4 w-4" />
                                                             </button>
 
-                                                            {/* Dropdown Menu */}
                                                             {openMenuId === item.id && (
                                                                 <div className="absolute right-8 top-1/2 -translate-y-1/2 w-32 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 z-10 overflow-hidden animate-in fade-in zoom-in duration-100">
                                                                     <button
@@ -341,7 +353,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                 </main>
             </div>
 
-            {/* Create Modal */}
             {isCreateModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setIsCreateModalOpen(false)}>
                     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
@@ -360,7 +371,7 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Resultado</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripcion del Resultado</label>
                                 <textarea
                                     className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                                     rows={3}
@@ -412,7 +423,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                 </div>
             )}
 
-            {/* Edit Modal */}
             {isEditModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}>
                     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
@@ -431,7 +441,7 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Resultado</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripcion del Resultado</label>
                                 <textarea
                                     className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                                     rows={3}
@@ -483,7 +493,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                 </div>
             )}
 
-            {/* Delete Modal */}
             {isDeleteModalOpen && itemToDelete && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setIsDeleteModalOpen(false)}>
                     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
@@ -491,9 +500,9 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                             <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
                                 <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">¿Eliminar proyecto?</h3>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Eliminar proyecto?</h3>
                             <p className="text-gray-500 dark:text-gray-400 mb-6">
-                                Se eliminará permanentemente &quot;{itemToDelete.project}&quot;.
+                                Se eliminara permanentemente &quot;{itemToDelete.project}&quot;.
                             </p>
                             <div className="flex justify-center gap-3">
                                 <button

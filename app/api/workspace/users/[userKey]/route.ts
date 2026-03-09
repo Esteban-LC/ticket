@@ -8,6 +8,8 @@ import {
   suspendWorkspaceUser,
 } from '@/lib/google-admin'
 import { logAdminAction } from '@/lib/admin-log'
+import { prisma } from '@/lib/prisma'
+import { canAccessWorkspace, canManageWorkspace } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +17,16 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canAccessWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
@@ -36,7 +47,16 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canManageWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
@@ -111,7 +131,16 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canManageWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 

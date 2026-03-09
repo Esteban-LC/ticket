@@ -5,11 +5,21 @@ import { listWorkspaceUsers, createWorkspaceUser } from '@/lib/google-admin'
 import { logAdminAction } from '@/lib/admin-log'
 import { wpUserService } from '@/lib/wordpress/users'
 import { prisma } from '@/lib/prisma'
+import { canAccessWorkspace, canManageWorkspace } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canAccessWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
@@ -17,9 +27,10 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('query') || undefined
     const orgUnitPath = searchParams.get('orgUnitPath') || undefined
     const pageToken = searchParams.get('pageToken') || undefined
-    const maxResults = parseInt(searchParams.get('maxResults') || '100')
+    const maxResults = parseInt(searchParams.get('maxResults') || '50')
+    const aggregateAll = searchParams.get('aggregateAll') === 'true'
 
-    const shouldAggregateAllPages = !pageToken
+    const shouldAggregateAllPages = aggregateAll && !pageToken
     let workspaceUsers: any[] = []
     let nextPageToken: string | undefined = pageToken || undefined
     let pagesFetched = 0
@@ -115,7 +126,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canManageWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 

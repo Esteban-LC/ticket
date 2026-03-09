@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, RefreshCw, ShoppingCart, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 
 interface LineItem {
   id: number
@@ -54,6 +54,9 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
 
   const [orders, setOrders] = useState<Order[]>([])
   const [statusFilter, setStatusFilter] = useState('')
+  const [subjectFilter, setSubjectFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([])
   const [bulkAction, setBulkAction] = useState<BulkAction>('')
   const [loading, setLoading] = useState(true)
@@ -89,6 +92,11 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
     return isNaN(d.getTime()) ? value : d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
+  const getOrderItemNames = (order: Order) =>
+    [...(order.line_items || []), ...(order.fee_lines || [])]
+      .map((item) => item.name?.trim())
+      .filter(Boolean) as string[]
+
   const fetchOrders = async () => {
     try {
       setLoading(true)
@@ -111,12 +119,43 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
     fetchOrders()
   }, [])
 
+  const subjectOptions = useMemo(() => {
+    const names = new Set<string>()
+    for (const order of orders) {
+      for (const name of getOrderItemNames(order)) names.add(name)
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'es-MX'))
+  }, [orders])
+
   const filteredOrders = useMemo(() => {
-    if (!statusFilter) return orders
-    return orders.filter((o) => o.status === statusFilter)
-  }, [orders, statusFilter])
+    return orders.filter((order) => {
+      if (statusFilter && order.status !== statusFilter) return false
+
+      const itemNames = getOrderItemNames(order)
+      if (subjectFilter && !itemNames.includes(subjectFilter)) return false
+
+      const createdAt = new Date(order.date_created)
+      if (isNaN(createdAt.getTime())) return !dateFrom && !dateTo
+
+      if (dateFrom) {
+        const from = new Date(`${dateFrom}T00:00:00`)
+        if (createdAt < from) return false
+      }
+
+      if (dateTo) {
+        const to = new Date(`${dateTo}T23:59:59.999`)
+        if (createdAt > to) return false
+      }
+
+      return true
+    })
+  }, [orders, statusFilter, subjectFilter, dateFrom, dateTo])
 
   const visibleOrderIds = useMemo(() => filteredOrders.map((o) => o.id), [filteredOrders])
+  const visibleSelectedOrderIds = useMemo(
+    () => selectedOrderIds.filter((id) => visibleOrderIds.includes(id)),
+    [selectedOrderIds, visibleOrderIds]
+  )
   const allVisibleSelected =
     visibleOrderIds.length > 0 && visibleOrderIds.every((id) => selectedOrderIds.includes(id))
 
@@ -155,14 +194,14 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
   }
 
   const applyBulkAction = async () => {
-    if (!bulkAction || selectedOrderIds.length === 0) return
+    if (!bulkAction || visibleSelectedOrderIds.length === 0) return
     try {
       setBulkLoading(true)
       setError(null)
       setSuccess(null)
 
       const results = await Promise.all(
-        selectedOrderIds.map(async (id) => {
+        visibleSelectedOrderIds.map(async (id) => {
           const res = await fetch(`/api/wordpress/orders/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -190,7 +229,7 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
         setSuccess(`Se actualizaron ${okIds.length} pedidos`)
       }
     } catch (e: any) {
-      setError(e.message || 'Error en acción en lote')
+      setError(e.message || 'Error en accion en lote')
     } finally {
       setBulkLoading(false)
     }
@@ -237,7 +276,7 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
           </select>
           <button
             onClick={applyBulkAction}
-            disabled={!bulkAction || selectedOrderIds.length === 0 || bulkLoading}
+            disabled={!bulkAction || visibleSelectedOrderIds.length === 0 || bulkLoading}
             className="rounded-lg border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/20"
           >
             {bulkLoading ? 'Aplicando...' : 'Aplicar'}
@@ -249,6 +288,49 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
+          <select
+            value={subjectFilter}
+            onChange={(e) => setSubjectFilter(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+          >
+            <option value="">Todas las materias</option>
+            {subjectOptions.map((subject) => (
+              <option key={subject} value={subject}>
+                {subject}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+            aria-label="Fecha inicial"
+          />
+
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+            aria-label="Fecha final"
+          />
+
+          <button
+            onClick={() => {
+              setSubjectFilter('')
+              setDateFrom('')
+              setDateTo('')
+            }}
+            type="button"
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700"
+          >
+            Limpiar filtros
           </button>
         </div>
       </div>
@@ -278,10 +360,18 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
         ) : (
           <>
             <div className="border-b border-gray-200 p-3 dark:border-slate-700">
-              <label className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectVisible} />
-                Seleccionar visibles ({filteredOrders.length})
-              </label>
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectVisible} />
+                  Seleccionar visibles ({filteredOrders.length})
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Seleccionados para lote: {visibleSelectedOrderIds.length}
+                  {selectedOrderIds.length > visibleSelectedOrderIds.length
+                    ? ` - Ocultos por filtro: ${selectedOrderIds.length - visibleSelectedOrderIds.length}`
+                    : ''}
+                </p>
+              </div>
             </div>
             <ul className="divide-y divide-gray-100 dark:divide-slate-700">
               {filteredOrders.map((order) => (
@@ -302,13 +392,13 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Cliente #{order.customer_id} · {formatDate(order.date_created)}
+                          Cliente #{order.customer_id} - {formatDate(order.date_created)}
                         </p>
                         {(() => {
-                          const items = [...(order.line_items || []), ...(order.fee_lines || [])]
+                          const items = getOrderItemNames(order)
                           return items.length > 0 ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {items.map((i) => i.name).join(', ')}
+                              {items.join(', ')}
                             </p>
                           ) : null
                         })()}
@@ -350,4 +440,3 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
     </div>
   )
 }
-

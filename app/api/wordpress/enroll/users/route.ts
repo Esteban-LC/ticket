@@ -38,30 +38,15 @@ export async function GET(request: NextRequest) {
     const rawSearch = (searchParams.get('search') || '').trim()
     const search = rawSearch || undefined
 
-    let users: WPUser[] = []
-    let totalFiltered = 0
-    let totalGlobal = 0
+    const users = await wpUserService.getUsers({
+      page,
+      per_page: per_page + 1,
+      ...(search ? { search } : {}),
+    })
+    const has_more = users.length > per_page
+    const visibleUsers = has_more ? users.slice(0, per_page) : users
 
-    if (!search) {
-      const [fetchedUsers, total] = await Promise.all([
-        wpUserService.getUsers({ page, per_page }),
-        wpUserService.getUsersCount(),
-      ])
-      users = fetchedUsers
-      totalFiltered = total
-      totalGlobal = total
-    } else {
-      const [fetchedUsers, filteredCount, globalCount] = await Promise.all([
-        wpUserService.getUsers({ page, per_page, search }),
-        wpUserService.getUsersCount({ search }),
-        wpUserService.getUsersCount(),
-      ])
-      users = fetchedUsers
-      totalFiltered = filteredCount
-      totalGlobal = globalCount
-    }
-
-    const userIds = users.map((u) => u.id)
+    const userIds = visibleUsers.map((u) => u.id)
     const suspendedUsers = await prisma.wordPressUser.findMany({
       where: { id: { in: userIds } },
       select: {
@@ -73,7 +58,7 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const usersWithStatus = users.map((user) => {
+    const usersWithStatus = visibleUsers.map((user) => {
       const suspended = suspendedUsers.find((s) => s.id === user.id)
       return {
         ...user,
@@ -84,16 +69,11 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const has_more = usersWithStatus.length === per_page && page * per_page < totalFiltered
-
     return NextResponse.json({
       users: usersWithStatus,
       pagination: {
         page,
         per_page,
-        total: totalFiltered,
-        total_filtered: totalFiltered,
-        total_global: totalGlobal,
         has_more,
       },
     })

@@ -7,6 +7,7 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
 import WordPressStudentsClient from '@/components/wordpress/WordPressStudentsClient'
 import { UserPlus, Users } from 'lucide-react'
+import { canViewWordPressUsers } from '@/lib/permissions'
 
 export const metadata = {
   title: 'Usuarios WordPress | Tickets LICEO MICHOACANO',
@@ -37,10 +38,7 @@ export default async function WordPressStudentsPage() {
   }
 
   // Verificar permisos de acceso a WordPress
-  const hasPermission =
-    user.role === 'ADMIN' ||
-    user.permissions.includes('wordpress:access') ||
-    user.permissions.includes('wordpress:manage_users')
+  const hasPermission = canViewWordPressUsers(user)
 
   if (!hasPermission) {
     redirect('/dashboard')
@@ -74,13 +72,17 @@ export default async function WordPressStudentsPage() {
                   </p>
                 </div>
                 </div>
-                <Link
-                  href="/dashboard/wordpress/enroll"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Enrolamiento
-                </Link>
+                {(user.role === 'ADMIN' ||
+                  user.permissions.includes('wordpress:manage_enrollments') ||
+                  user.permissions.includes('wordpress:manage_users')) && (
+                  <Link
+                    href="/dashboard/wordpress/enroll"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Enrolamiento
+                  </Link>
+                )}
               </div>
             </div>
 

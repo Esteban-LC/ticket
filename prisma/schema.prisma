@@ -306,20 +306,64 @@ model Report {
 }
 
 model WordPressUser {
-  id               Int       @id // ID del usuario en WordPress
-  email            String    @unique
+  id               Int           @id // ID del usuario en WordPress
+  email            String        @unique
   username         String?
   name             String?
-  isSuspended      Boolean   @default(false)
-  suspendedBy      String?   // ID del admin que suspendió
+  isSuspended      Boolean       @default(false)
+  paymentStatus    PaymentStatus @default(CURRENT)
+  paymentNotes     String?
+  paymentUpdatedBy String?
+  paymentUpdatedAt DateTime?
+  suspendedBy      String?       // ID del admin que suspendio
   suspendedAt      DateTime?
   suspensionReason String?
-  notes            String?   // Notas adicionales sobre el usuario
+  notes            String?       // Notas adicionales sobre el usuario
   deletedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@index([email])
   @@index([isSuspended])
+  @@index([paymentStatus])
   @@index([deletedAt])
+}
+
+model TuitionFollowUp {
+  id               String        @id @default(cuid())
+  sourceType       TuitionSourceType
+  sourceExternalId String
+  wordPressUserId  Int?
+  studentEmail     String
+  studentName      String?
+  studentUsername  String?
+  status           PaymentStatus
+  notes            String?
+  createdById      String?
+  createdByEmail   String?
+  completedAt      DateTime?
+  completedById    String?
+  completedByEmail String?
+  deletedAt        DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([wordPressUserId])
+  @@index([sourceType, sourceExternalId])
+  @@index([studentEmail])
+  @@index([status])
+  @@index([completedAt])
+  @@index([deletedAt])
+  @@index([createdAt])
+}
+
+enum PaymentStatus {
+  CURRENT
+  OVERDUE
+  DROPPED
+}
+
+enum TuitionSourceType {
+  WORKSPACE
+  WORDPRESS
 }

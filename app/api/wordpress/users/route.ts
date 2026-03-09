@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { wpUserService } from '@/lib/wordpress/users'
 import { prisma } from '@/lib/prisma'
+import { canManageTuitionStatus, canViewWordPressUsers } from '@/lib/permissions'
 
 /**
  * GET /api/wordpress/users
@@ -18,11 +19,8 @@ export async function GET(request: NextRequest) {
 
     // Verificar permisos
     const userPermissions = (session.user as any).permissions || []
-    if (
-      !userPermissions.includes('wordpress:manage_users') &&
-      !userPermissions.includes('wordpress:manage_enrollments') &&
-      session.user.role !== 'ADMIN'
-    ) {
+    if (!canViewWordPressUsers({ role: session.user.role, permissions: userPermissions }) &&
+      !canManageTuitionStatus({ role: session.user.role, permissions: userPermissions })) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 
@@ -52,6 +50,10 @@ export async function GET(request: NextRequest) {
         suspendedBy: true,
         suspendedAt: true,
         suspensionReason: true,
+        paymentStatus: true,
+        paymentNotes: true,
+        paymentUpdatedAt: true,
+        paymentUpdatedBy: true,
       },
     })
 
@@ -64,6 +66,10 @@ export async function GET(request: NextRequest) {
         suspendedBy: suspended?.suspendedBy,
         suspendedAt: suspended?.suspendedAt,
         suspensionReason: suspended?.suspensionReason,
+        paymentStatus: suspended?.paymentStatus || 'CURRENT',
+        paymentNotes: suspended?.paymentNotes || null,
+        paymentUpdatedAt: suspended?.paymentUpdatedAt || null,
+        paymentUpdatedBy: suspended?.paymentUpdatedBy || null,
       }
     })
 

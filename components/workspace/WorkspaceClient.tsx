@@ -22,6 +22,7 @@ import CreateUserModal from './CreateUserModal'
 import EditUserModal from './EditUserModal'
 import ConfirmModal from './ConfirmModal'
 import AdminHistory from './AdminHistory'
+import { canManageWorkspace } from '@/lib/permissions'
 
 interface WorkspaceUser {
   id: string
@@ -48,7 +49,15 @@ interface OrgUnit {
   description?: string
 }
 
-export default function WorkspaceClient() {
+interface WorkspaceClientProps {
+  currentUser: {
+    role?: string
+    permissions?: string[]
+  }
+}
+
+export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
+  const canManage = canManageWorkspace(currentUser)
   const [users, setUsers] = useState<WorkspaceUser[]>([])
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([])
   const [loading, setLoading] = useState(true)
@@ -77,6 +86,7 @@ export default function WorkspaceClient() {
       const params = new URLSearchParams()
       if (searchQuery) params.set('query', searchQuery)
       if (selectedOrgUnit) params.set('orgUnitPath', selectedOrgUnit)
+      params.set('maxResults', searchQuery || selectedOrgUnit ? '100' : '50')
 
       const res = await fetch(`/api/workspace/users?${params}`)
       if (!res.ok) {
@@ -305,13 +315,15 @@ export default function WorkspaceClient() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            <UserPlus className="h-4 w-4" />
-            Nuevo Usuario
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              <UserPlus className="h-4 w-4" />
+              Nuevo Usuario
+            </button>
+          )}
         </div>
       </div>
 
@@ -391,20 +403,34 @@ export default function WorkspaceClient() {
           </div>
         </button>
 
-        <button
-          onClick={() => setActiveTab('orgunits')}
-          className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 transition-all hover:shadow-lg hover:scale-105 text-left"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Unidades Org.</p>
-              <p className="text-2xl lg:text-3xl font-bold text-purple-600 dark:text-purple-400 mt-2">{orgUnits.length}</p>
+        {canManage ? (
+          <button
+            onClick={() => setActiveTab('orgunits')}
+            className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 transition-all hover:shadow-lg hover:scale-105 text-left"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Unidades Org.</p>
+                <p className="text-2xl lg:text-3xl font-bold text-purple-600 dark:text-purple-400 mt-2">{orgUnits.length}</p>
+              </div>
+              <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
+                <FolderTree className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
             </div>
-            <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
-              <FolderTree className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          </button>
+        ) : (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 text-left">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Consulta</p>
+                <p className="text-2xl lg:text-3xl font-bold text-purple-600 dark:text-purple-400 mt-2">Solo lectura</p>
+              </div>
+              <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
+                <FolderTree className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
             </div>
           </div>
-        </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -420,29 +446,33 @@ export default function WorkspaceClient() {
           <Users className="h-4 w-4" />
           Usuarios
         </button>
-        <button
-          onClick={() => setActiveTab('orgunits')}
-          className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
-            activeTab === 'orgunits'
-              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-          }`}
-        >
-          <FolderTree className="h-4 w-4" />
-          <span className="hidden sm:inline">Unidades Organizativas</span>
-          <span className="sm:hidden">UOs</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
-            activeTab === 'history'
-              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-          }`}
-        >
-          <History className="h-4 w-4" />
-          Historial
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setActiveTab('orgunits')}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+              activeTab === 'orgunits'
+                ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <FolderTree className="h-4 w-4" />
+            <span className="hidden sm:inline">Unidades Organizativas</span>
+            <span className="sm:hidden">UOs</span>
+          </button>
+        )}
+        {canManage && (
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+              activeTab === 'history'
+                ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <History className="h-4 w-4" />
+            Historial
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('profile')}
           className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
@@ -460,7 +490,7 @@ export default function WorkspaceClient() {
       {activeTab === 'users' && (
         <div>
           {/* Botón regresar a OUs */}
-          {selectedOrgUnit && (
+          {canManage && selectedOrgUnit && (
             <button
               onClick={() => setActiveTab('orgunits')}
               className="flex items-center gap-1.5 mb-3 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
@@ -492,7 +522,7 @@ export default function WorkspaceClient() {
               </button>
             </form>
             <div className="flex flex-wrap gap-2">
-              {selectedOrgUnit && (
+              {canManage && selectedOrgUnit && (
                 <button
                   onClick={() => { setSelectedOrgUnit(null); }}
                   className="px-3 py-2 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition flex items-center gap-1 max-w-full"
@@ -542,6 +572,7 @@ export default function WorkspaceClient() {
           <WorkspaceUserList
             users={filteredUsers}
             loading={loading}
+            canManage={canManage}
             onEdit={setEditingUser}
             onSuspend={handleSuspendUser}
             onDelete={handleDeleteUser}
@@ -551,14 +582,14 @@ export default function WorkspaceClient() {
         </div>
       )}
 
-      {activeTab === 'orgunits' && (
+      {canManage && activeTab === 'orgunits' && (
         <OrgUnitTree
           orgUnits={orgUnits}
           onSelectOrgUnit={handleSelectOrgUnit}
         />
       )}
 
-      {activeTab === 'history' && <AdminHistory />}
+      {canManage && activeTab === 'history' && <AdminHistory />}
 
       {activeTab === 'profile' && (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
@@ -659,7 +690,7 @@ export default function WorkspaceClient() {
       )}
 
       {/* Modals */}
-      {showCreateModal && (
+      {canManage && showCreateModal && (
         <CreateUserModal
           orgUnits={orgUnits}
           defaultOrgUnitPath={selectedOrgUnit}
@@ -668,7 +699,7 @@ export default function WorkspaceClient() {
         />
       )}
 
-      {editingUser && (
+      {canManage && editingUser && (
         <EditUserModal
           user={editingUser}
           orgUnits={orgUnits}
@@ -677,7 +708,7 @@ export default function WorkspaceClient() {
         />
       )}
 
-      {confirmAction && (
+      {canManage && confirmAction && (
         <ConfirmModal
           title={
             confirmAction.type === 'delete'

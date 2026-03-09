@@ -13,24 +13,14 @@ export async function GET(request: NextRequest) {
 
         const user = await prisma.user.findUnique({
             where: { email: session.user.email },
-            select: { id: true, role: true, departmentId: true }
+            select: { id: true, role: true }
         })
 
         if (!user) {
             return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
         }
 
-        // Filtrar por usuario según rol
-        const where: any = {}
-        if (user.role === 'ADMIN') {
-            // ADMIN ve todos
-        } else if (user.role === 'COORDINATOR' && user.departmentId) {
-            // COORDINATOR ve items de su departamento
-            where.user = { departmentId: user.departmentId }
-        } else {
-            // EDITOR y VIEWER solo ven los suyos
-            where.userId = user.id
-        }
+        const where = user.role === 'ADMIN' ? {} : { userId: user.id }
 
         const items = await prisma.resultItem.findMany({
             where,
@@ -66,7 +56,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
         }
 
-        // VIEWER no puede crear
         if (user.role === 'VIEWER') {
             return NextResponse.json({ error: 'No tienes permisos para crear' }, { status: 403 })
         }
