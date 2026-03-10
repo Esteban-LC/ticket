@@ -4,9 +4,9 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { UserRole } from '@prisma/client'
-import { useRouter } from 'next/navigation'
 import { Mail, Ticket, UserCog } from 'lucide-react'
 import EditUserModal from './EditUserModal'
+import { getEffectiveDisplayPermissions, getPermissionLabel } from '@/lib/permissions'
 
 interface User {
   id: string
@@ -50,7 +50,6 @@ const departmentColors: Record<string, string> = {
 }
 
 export default function UsersTable({ users }: UsersTableProps) {
-  const router = useRouter()
   const [editingUser, setEditingUser] = useState<User | null>(null)
 
   if (users.length === 0) {
@@ -65,7 +64,10 @@ export default function UsersTable({ users }: UsersTableProps) {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {users.map((user) => (
+        {users.map((user) => {
+          const displayPermissions = getEffectiveDisplayPermissions(user)
+
+          return (
           <div key={user.id} className="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow hover:shadow-md transition">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
@@ -101,7 +103,42 @@ export default function UsersTable({ users }: UsersTableProps) {
                   <Mail className="h-4 w-4 mr-2" />
                   <span className="truncate">{user.email}</span>
                 </div>
+              </div>
 
+              <div className="mt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Permisos especiales
+                  </p>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {user.role === 'ADMIN' ? 'Acceso total' : displayPermissions.length}
+                  </span>
+                </div>
+                {displayPermissions.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {displayPermissions.map((permission) => (
+                      <span
+                        key={permission}
+                        className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                      >
+                        {getPermissionLabel(permission)}
+                      </span>
+                    ))}
+                  </div>
+                ) : user.role === 'ADMIN' ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                      Acceso total por rol ADMIN
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
+                      Puede gestionar usuarios y altas
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-400 dark:text-gray-500 italic">
+                    Sin permisos adicionales.
+                  </p>
+                )}
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 grid grid-cols-2 gap-4">
@@ -133,7 +170,7 @@ export default function UsersTable({ users }: UsersTableProps) {
               </div>
             </div>
           </div>
-        ))}
+        )})}
       </div>
 
       {editingUser && (

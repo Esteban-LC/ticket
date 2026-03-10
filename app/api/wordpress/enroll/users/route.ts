@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { wpUserService } from '@/lib/wordpress/users'
 import { prisma } from '@/lib/prisma'
+import { getEffectiveSuspensionState, syncWordPressSuspensionState } from '@/lib/wordpress/suspension-sync'
 
 type WPUser = {
   id: number
@@ -43,8 +44,20 @@ export async function GET(request: NextRequest) {
       per_page: per_page + 1,
       ...(search ? { search } : {}),
     })
-    const has_more = users.length > per_page
-    const visibleUsers = has_more ? users.slice(0, per_page) : users
+    const usersWithSuspension = await Promise.all(
+      users.map(async (user) => {
+        const suspensionStatus = await wpUserService.getSuspensionStatus(user.id).catch(() => null)
+        return {
+          ...user,
+          is_suspended: suspensionStatus?.suspended ?? user.is_suspended,
+          suspension_reason: suspensionStatus?.reason ?? user.suspension_reason,
+          suspended_at: suspensionStatus?.suspended_at ?? user.suspended_at,
+        }
+      })
+    )
+    await syncWordPressSuspensionState(usersWithSuspension)
+    const has_more = usersWithSuspension.length > per_page
+    const visibleUsers = has_more ? usersWithSuspension.slice(0, per_page) : usersWithSuspension
 
     const userIds = visibleUsers.map((u) => u.id)
     const suspendedUsers = await prisma.wordPressUser.findMany({
@@ -60,12 +73,13 @@ export async function GET(request: NextRequest) {
 
     const usersWithStatus = visibleUsers.map((user) => {
       const suspended = suspendedUsers.find((s) => s.id === user.id)
+      const effectiveSuspension = getEffectiveSuspensionState(user, suspended)
       return {
         ...user,
-        isSuspended: suspended?.isSuspended || false,
-        suspendedBy: suspended?.suspendedBy,
-        suspendedAt: suspended?.suspendedAt,
-        suspensionReason: suspended?.suspensionReason,
+        isSuspended: effectiveSuspension.isSuspended,
+        suspendedBy: effectiveSuspension.suspendedBy,
+        suspendedAt: effectiveSuspension.suspendedAt,
+        suspensionReason: effectiveSuspension.suspensionReason,
       }
     })
 

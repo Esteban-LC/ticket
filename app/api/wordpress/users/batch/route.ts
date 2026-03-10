@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { wpUserService } from '@/lib/wordpress/users'
+import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
 
 type BatchAction = 'suspend' | 'unsuspend' | 'delete' | 'create'
 
@@ -36,9 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Acción inválida' }, { status: 400 })
     }
 
-    const currentUser = await prisma.user.findFirst({
-      where: { email: session.user.email || '', deletedAt: null },
-    })
+    const currentUser = await getSessionAuditActor(session)
 
     if (!currentUser) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
@@ -71,6 +70,21 @@ export async function POST(request: NextRequest) {
             deletedAt: null,
           },
           update: updateData,
+        })
+
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: created.email || `wp_user_${created.user_id}@temp.local`,
+          targetName: created.username || null,
+          entity: 'WORDPRESS_USER',
+          entityId: String(created.user_id),
+          event: 'created',
+          details: {
+            username: created.username || null,
+            email: created.email || null,
+            mode: users.length > 1 ? 'bulk' : 'single',
+          },
         })
       }
 
@@ -129,6 +143,20 @@ export async function POST(request: NextRequest) {
           },
           update: updateData,
         })
+
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: wpUser.email || `wp_user_${userId}@temp.local`,
+          targetName: wpUser.name || wpUser.username || null,
+          entity: 'WORDPRESS_USER',
+          entityId: String(userId),
+          event: 'suspended',
+          details: {
+            reason: body?.reason || '',
+            mode: 'bulk',
+          },
+        })
       }
 
       await prisma.adminLog.create({
@@ -160,6 +188,28 @@ export async function POST(request: NextRequest) {
             suspensionReason: null,
           },
         })
+
+        const localUsers = await prisma.wordPressUser.findMany({
+          where: { id: { in: successIds } },
+          select: { id: true, email: true, name: true, username: true },
+        })
+
+        await Promise.all(
+          localUsers.map((user) =>
+            logEntityAudit({
+              adminId: currentUser.id,
+              adminEmail: currentUser.email,
+              targetEmail: user.email,
+              targetName: user.name || user.username || null,
+              entity: 'WORDPRESS_USER',
+              entityId: String(user.id),
+              event: 'unsuspended',
+              details: {
+                mode: 'bulk',
+              },
+            })
+          )
+        )
       }
 
       await prisma.adminLog.create({
@@ -202,6 +252,20 @@ export async function POST(request: NextRequest) {
               suspendedBy: null,
               suspendedAt: null,
               suspensionReason: null,
+            },
+          })
+
+          await logEntityAudit({
+            adminId: currentUser.id,
+            adminEmail: currentUser.email,
+            targetEmail: tombstoneEmail,
+            targetName: null,
+            entity: 'WORDPRESS_USER',
+            entityId: String(localUser.id),
+            event: 'deleted',
+            details: {
+              mode: 'bulk',
+              reassign: reassign > 0 ? reassign : null,
             },
           })
         }

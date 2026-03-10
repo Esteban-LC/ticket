@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { wooCommerceService } from '@/lib/wordpress/woocommerce'
 import { tutorLMSService } from '@/lib/wordpress/tutor-lms'
+import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
 
 /**
  * GET /api/wordpress/orders/[id]
@@ -67,17 +68,19 @@ export async function PUT(
 
     const orderId = parseInt(params.id)
     const { status } = await request.json()
+    const currentUser = await getSessionAuditActor(session)
 
     if (!status) {
       return NextResponse.json({ error: 'status es requerido' }, { status: 400 })
     }
 
     let enrollmentWarning: string | null = null
+    let existingOrder: any = null
 
     // Al acreditar (completar), disparar enrolamiento en Tutor LMS si el pedido es de enrolamiento admin
     if (status === 'completed') {
       try {
-        const existingOrder = await wooCommerceService.getOrder(orderId)
+        existingOrder = await wooCommerceService.getOrder(orderId)
         const meta: Array<{ key: string; value: string }> = (existingOrder as any).meta_data || []
         const isPending = meta.some((m) => m.key === '_liq_enrollment_pending' && m.value === '1')
 
@@ -107,6 +110,28 @@ export async function PUT(
     }
 
     const order = await wooCommerceService.updateOrderStatus(orderId, status)
+
+    const sourceOrder = existingOrder || order
+    if (currentUser?.id && currentUser.email) {
+      await logEntityAudit({
+        adminId: currentUser.id,
+        adminEmail: currentUser.email,
+        targetEmail: sourceOrder?.billing?.email || session.user.email || `order-${orderId}@local`,
+        targetName: `Pedido #${order.number || orderId}`,
+        entity: 'WORDPRESS_ORDER',
+        entityId: String(orderId),
+        event: 'status_updated',
+        details: {
+          orderId,
+          orderNumber: order.number || String(orderId),
+          newStatus: status,
+          previousStatus: sourceOrder?.status || null,
+          total: order.total || null,
+          customerId: order.customer_id || null,
+          enrollmentWarning,
+        },
+      })
+    }
 
     return NextResponse.json({
       order,

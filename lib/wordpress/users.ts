@@ -23,6 +23,9 @@ export interface WordPressUser {
   extra_capabilities: Record<string, boolean>
   avatar_urls: Record<string, string>
   meta: any[]
+  is_suspended?: boolean
+  suspension_reason?: string | null
+  suspended_at?: string | null
 }
 
 export interface CreateUserData {
@@ -251,6 +254,21 @@ export class WordPressUserService {
       payload.reassign = reassign
     }
     return wpClient.post('/custom/v1/users/batch/delete', payload)
+  }
+
+  /**
+   * Obtener estadísticas agregadas de usuarios (totales por rol + suspendidos)
+   */
+  async getUsersStats(): Promise<{
+    total: number
+    roles: Record<string, number>
+    suspended: number
+  }> {
+    return wpClient.get('/custom/v1/users/stats')
+  }
+
+  async getSuspendedUsers(): Promise<{ users: WordPressUser[]; total: number }> {
+    return wpClient.get('/custom/v1/users/suspended')
   }
 
   async createUsersBatch(users: Array<{

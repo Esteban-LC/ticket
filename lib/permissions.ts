@@ -86,6 +86,10 @@ export const USER_PERMISSION_GROUPS: Array<{
 ]
 
 export const ALL_USER_PERMISSIONS = USER_PERMISSION_GROUPS.flatMap((group) => group.permissions)
+export const USER_PERMISSION_LABELS = new Map(
+  ALL_USER_PERMISSIONS.map((permission) => [permission.key, permission.label])
+)
+const ADMIN_HIDDEN_PERMISSION_KEYS = new Set(['VIEW_DEPARTMENT_REPORTS'])
 
 type PermissionUser = {
   role?: string | null
@@ -133,4 +137,31 @@ export function canAccessWordPress(user: PermissionUser | null | undefined) {
 
 export function canManageTuitionStatus(user: PermissionUser | null | undefined) {
   return hasPermission(user, 'tuition:manage_status')
+}
+
+export function getPermissionLabel(permissionKey: string) {
+  return USER_PERMISSION_LABELS.get(permissionKey) || permissionKey
+}
+
+export function getEffectiveDisplayPermissions(user: PermissionUser | null | undefined) {
+  if (!user) return []
+
+  const explicitPermissions = Array.isArray(user.permissions) ? user.permissions : []
+  if (user.role !== 'ADMIN') {
+    return explicitPermissions
+  }
+
+  const inheritedAdminPermissions = ALL_USER_PERMISSIONS
+    .map((permission) => permission.key)
+    .filter((permissionKey) => !ADMIN_HIDDEN_PERMISSION_KEYS.has(permissionKey))
+
+  const mergedPermissions = new Set([...inheritedAdminPermissions, ...explicitPermissions])
+  return Array.from(mergedPermissions)
+}
+
+export function isPermissionEffectivelyChecked(
+  user: PermissionUser | null | undefined,
+  permissionKey: string
+) {
+  return getEffectiveDisplayPermissions(user).includes(permissionKey)
 }

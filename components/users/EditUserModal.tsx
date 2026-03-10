@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { X, Shield, KeyRound } from 'lucide-react'
-import { USER_PERMISSION_GROUPS } from '@/lib/permissions'
+import { isPermissionEffectivelyChecked, USER_PERMISSION_GROUPS } from '@/lib/permissions'
 
 interface Department {
   id: string
@@ -57,6 +57,12 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
         : [...prev.permissions, key],
     }))
   }
+
+  const isEffectivelyChecked = (permissionKey: string) =>
+    isPermissionEffectivelyChecked(
+      { role: formData.role, permissions: formData.permissions },
+      permissionKey
+    )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -207,6 +213,11 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                 <KeyRound className="h-4 w-4" />
                 Permisos Especiales
               </label>
+              {formData.role === 'ADMIN' && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-3">
+                  Los administradores heredan acceso total por rol. Aqui se muestran marcados los permisos efectivos; "Ver reportes por departamento" solo se marca si tambien fue asignado explicitamente.
+                </p>
+              )}
               <div className="space-y-4">
                 {USER_PERMISSION_GROUPS.map((group) => (
                   <div key={group.title}>
@@ -221,7 +232,7 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                         >
                           <input
                             type="checkbox"
-                            checked={formData.permissions.includes(perm.key)}
+                            checked={isEffectivelyChecked(perm.key)}
                             onChange={() => togglePermission(perm.key)}
                             className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
                           />

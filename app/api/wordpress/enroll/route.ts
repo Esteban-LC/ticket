@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { tutorLMSService } from '@/lib/wordpress/tutor-lms'
 import { wooCommerceService } from '@/lib/wordpress/woocommerce'
+import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
 
 /**
  * POST /api/wordpress/enroll
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: any = await request.json()
+    const currentUser = await getSessionAuditActor(session)
     const user_id = body.user_id ? Number(body.user_id) : undefined
     const user_ids: number[] = Array.isArray(body.user_ids)
       ? body.user_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
@@ -50,6 +52,47 @@ export async function POST(request: NextRequest) {
         customer_id: user_id,
         courses: courseNamesFromBody,
       })
+
+      if (currentUser?.id && currentUser.email) {
+        await Promise.all([
+          logEntityAudit({
+            adminId: currentUser.id,
+            adminEmail: currentUser.email,
+            targetEmail: `wp_user_${user_id}`,
+            targetName: `Pedido #${order.id}`,
+            entity: 'WORDPRESS_ORDER',
+            entityId: String(order.id),
+            event: 'created',
+            details: {
+              orderId: order.id,
+              userId: user_id,
+              courseIds: course_ids,
+              courseNames: courseNamesFromBody.map((course) => course.name),
+              mode: 'user_to_courses',
+              newStatus: order.status,
+            },
+          }),
+          ...course_ids.map((courseId) => {
+            const courseName = courseNamesFromBody.find((course) => course.id === courseId)?.name || `Curso #${courseId}`
+            return logEntityAudit({
+              adminId: currentUser.id,
+              adminEmail: currentUser.email,
+              targetEmail: `wp_user_${user_id}`,
+              targetName: `Usuario #${user_id}`,
+              entity: 'WORDPRESS_ENROLLMENT',
+              entityId: `${user_id}:${courseId}`,
+              event: 'enrolled',
+              details: {
+                userId: user_id,
+                courseId,
+                courseName,
+                orderId: order.id,
+                mode: 'user_to_courses',
+              },
+            })
+          }),
+        ])
+      }
 
       return NextResponse.json({
         success: true,
@@ -80,6 +123,23 @@ export async function POST(request: NextRequest) {
     // Modo individual (retrocompatibilidad)
     if (user_id && user_ids.length === 0) {
       const result = await tutorLMSService.enrollStudent(user_id, course_id, { skipOrderCheck: skip_order_check })
+      if (currentUser?.id && currentUser.email) {
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: `wp_user_${user_id}`,
+          targetName: `Usuario #${user_id}`,
+          entity: 'WORDPRESS_ENROLLMENT',
+          entityId: `${user_id}:${course_id}`,
+          event: 'enrolled',
+          details: {
+            userId: user_id,
+            courseId: course_id,
+            mode: 'single',
+            skipOrderCheck: skip_order_check,
+          },
+        })
+      }
       return NextResponse.json({ success: true, result }, { status: 201 })
     }
 
@@ -95,6 +155,43 @@ export async function POST(request: NextRequest) {
           customer_id: targetUserId,
           courses: [{ id: course_id, name: courseTitleForOrder }],
         })
+        if (currentUser?.id && currentUser.email) {
+          await Promise.all([
+            logEntityAudit({
+              adminId: currentUser.id,
+              adminEmail: currentUser.email,
+              targetEmail: `wp_user_${targetUserId}`,
+              targetName: `Pedido #${order.id}`,
+              entity: 'WORDPRESS_ORDER',
+              entityId: String(order.id),
+              event: 'created',
+              details: {
+                orderId: order.id,
+                userId: targetUserId,
+                courseIds: [course_id],
+                courseNames: [courseTitleForOrder],
+                mode: 'course_to_users',
+                newStatus: order.status,
+              },
+            }),
+            logEntityAudit({
+              adminId: currentUser.id,
+              adminEmail: currentUser.email,
+              targetEmail: `wp_user_${targetUserId}`,
+              targetName: `Usuario #${targetUserId}`,
+              entity: 'WORDPRESS_ENROLLMENT',
+              entityId: `${targetUserId}:${course_id}`,
+              event: 'enrolled',
+              details: {
+                userId: targetUserId,
+                courseId: course_id,
+                courseName: courseTitleForOrder,
+                orderId: order.id,
+                mode: 'course_to_users',
+              },
+            }),
+          ])
+        }
         results.push({
           user_id: targetUserId,
           success: true,
@@ -152,6 +249,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const body: any = await request.json()
+    const currentUser = await getSessionAuditActor(session)
     const user_id = body.user_id ? Number(body.user_id) : undefined
     const user_ids: number[] = Array.isArray(body.user_ids)
       ? body.user_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
@@ -168,6 +266,22 @@ export async function DELETE(request: NextRequest) {
     // Modo individual (retrocompatibilidad)
     if (user_id && user_ids.length === 0) {
       const result = await tutorLMSService.unenrollStudent(user_id, course_id)
+      if (currentUser?.id && currentUser.email) {
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: `wp_user_${user_id}`,
+          targetName: `Usuario #${user_id}`,
+          entity: 'WORDPRESS_ENROLLMENT',
+          entityId: `${user_id}:${course_id}`,
+          event: 'unenrolled',
+          details: {
+            userId: user_id,
+            courseId: course_id,
+            mode: 'single',
+          },
+        })
+      }
       return NextResponse.json({ success: true, result })
     }
 
@@ -179,6 +293,22 @@ export async function DELETE(request: NextRequest) {
     for (const targetUserId of uniqueTargets) {
       try {
         await tutorLMSService.unenrollStudent(targetUserId, course_id)
+        if (currentUser?.id && currentUser.email) {
+          await logEntityAudit({
+            adminId: currentUser.id,
+            adminEmail: currentUser.email,
+            targetEmail: `wp_user_${targetUserId}`,
+            targetName: `Usuario #${targetUserId}`,
+            entity: 'WORDPRESS_ENROLLMENT',
+            entityId: `${targetUserId}:${course_id}`,
+            event: 'unenrolled',
+            details: {
+              userId: targetUserId,
+              courseId: course_id,
+              mode: 'bulk',
+            },
+          })
+        }
         results.push({ user_id: targetUserId, success: true })
       } catch (error: any) {
         results.push({

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canManageTuitionStatus } from '@/lib/permissions'
+import { getEntityAuditTrailMap, logEntityAudit } from '@/lib/audit-log'
 
 const VALID_STATUSES = new Set(['CURRENT', 'OVERDUE', 'DROPPED'])
 const VALID_SOURCE_TYPES = new Set(['WORKSPACE', 'WORDPRESS'])
@@ -113,6 +114,11 @@ export async function GET(request: NextRequest) {
       ],
     })
 
+    const auditTrailMap = await getEntityAuditTrailMap(
+      'TUITION_FOLLOW_UP',
+      items.map((item) => item.id)
+    )
+
     const summary = await prisma.tuitionFollowUp.groupBy({
       by: ['status'],
       where: {
@@ -142,7 +148,13 @@ export async function GET(request: NextRequest) {
       counts[entry.status] = entry._count._all
     })
 
-    return NextResponse.json({ items, counts })
+    return NextResponse.json({
+      items: items.map((item) => ({
+        ...item,
+        history: auditTrailMap.get(item.id) || [],
+      })),
+      counts,
+    })
   } catch (error: any) {
     console.error('Error fetching tuition follow-ups:', error)
     return NextResponse.json({ error: error.message || 'Error al obtener seguimiento' }, { status: 500 })
@@ -185,6 +197,7 @@ export async function POST(request: NextRequest) {
         parsedItems.push(parsed.item)
       }
 
+      const createdAt = new Date()
       await prisma.tuitionFollowUp.createMany({
         data: parsedItems.map((item) => ({
           sourceType: item.sourceType,
@@ -197,8 +210,48 @@ export async function POST(request: NextRequest) {
           notes: item.notes,
           createdById,
           createdByEmail,
+          createdAt,
         })),
       })
+
+      const createdRecords = await prisma.tuitionFollowUp.findMany({
+        where: {
+          deletedAt: null,
+          createdAt,
+          createdById,
+          studentEmail: { in: parsedItems.map((item) => item.studentEmail) },
+        },
+        select: {
+          id: true,
+          studentEmail: true,
+          studentName: true,
+          status: true,
+          sourceType: true,
+          sourceExternalId: true,
+        },
+      })
+
+      if (createdById && createdByEmail) {
+        await Promise.all(
+          createdRecords.map((record) =>
+            logEntityAudit({
+              adminId: createdById,
+              adminEmail: createdByEmail,
+              targetEmail: record.studentEmail,
+              targetName: record.studentName,
+              entity: 'TUITION_FOLLOW_UP',
+              entityId: record.id,
+              event: 'created',
+              details: {
+                status: record.status,
+                sourceType: record.sourceType,
+                sourceExternalId: record.sourceExternalId,
+                mode: 'bulk',
+              },
+            })
+          )
+        )
+      }
 
       return NextResponse.json({ success: true, created: parsedItems.length }, { status: 201 })
     }
@@ -223,6 +276,24 @@ export async function POST(request: NextRequest) {
         createdByEmail,
       },
     })
+
+    if (createdById && createdByEmail) {
+      await logEntityAudit({
+        adminId: createdById,
+        adminEmail: createdByEmail,
+        targetEmail: item.studentEmail,
+        targetName: item.studentName,
+        entity: 'TUITION_FOLLOW_UP',
+        entityId: item.id,
+        event: 'created',
+        details: {
+          status: item.status,
+          sourceType: item.sourceType,
+          sourceExternalId: item.sourceExternalId,
+          mode: 'single',
+        },
+      })
+    }
 
     return NextResponse.json({ item }, { status: 201 })
   } catch (error: any) {

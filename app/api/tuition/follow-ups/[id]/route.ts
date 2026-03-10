@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canManageTuitionStatus } from '@/lib/permissions'
+import { logEntityAudit } from '@/lib/audit-log'
 
 export async function PATCH(
   request: NextRequest,
@@ -47,6 +48,21 @@ export async function PATCH(
           completedByEmail: currentUser?.email || session.user.email || null,
         },
       })
+
+      if (currentUser?.id && currentUser.email) {
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: item.studentEmail,
+          targetName: item.studentName,
+          entity: 'TUITION_FOLLOW_UP',
+          entityId: item.id,
+          event: 'completed',
+          details: {
+            status: item.status,
+          },
+        })
+      }
     } else if (action === 'reopen') {
       item = await prisma.tuitionFollowUp.update({
         where: { id },
@@ -56,6 +72,21 @@ export async function PATCH(
           completedByEmail: null,
         },
       })
+
+      if (currentUser?.id && currentUser.email) {
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: item.studentEmail,
+          targetName: item.studentName,
+          entity: 'TUITION_FOLLOW_UP',
+          entityId: item.id,
+          event: 'reopened',
+          details: {
+            status: item.status,
+          },
+        })
+      }
     } else {
       return NextResponse.json({ error: 'Accion invalida' }, { status: 400 })
     }
@@ -98,10 +129,25 @@ export async function DELETE(
       return NextResponse.json({ error: 'Registro no encontrado' }, { status: 404 })
     }
 
-    await prisma.tuitionFollowUp.update({
+    const deletedItem = await prisma.tuitionFollowUp.update({
       where: { id },
       data: { deletedAt: new Date() },
     })
+
+    if (currentUser?.id && currentUser.email) {
+      await logEntityAudit({
+        adminId: currentUser.id,
+        adminEmail: currentUser.email,
+        targetEmail: deletedItem.studentEmail,
+        targetName: deletedItem.studentName,
+        entity: 'TUITION_FOLLOW_UP',
+        entityId: deletedItem.id,
+        event: 'deleted',
+        details: {
+          status: deletedItem.status,
+        },
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

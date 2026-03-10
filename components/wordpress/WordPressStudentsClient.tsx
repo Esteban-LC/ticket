@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search, Users, GraduationCap, Building2, ChevronRight, UserX, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import EntityHistoryPanel, { EntityHistoryRow } from '@/components/shared/EntityHistoryPanel'
 
 interface WordPressUser {
   id: number
@@ -11,6 +12,18 @@ interface WordPressUser {
   email: string
   roles: string[]
   isSuspended?: boolean
+  createdByName?: string | null
+  suspendedByName?: string | null
+}
+
+interface WordPressUserAction {
+  id: string
+  entityId: string
+  event: string
+  actorEmail: string
+  createdAt: string
+  targetEmail: string
+  targetName: string | null
 }
 
 interface WordPressStudentsClientProps {
@@ -26,8 +39,12 @@ interface RoleStats {
   suspended: number
 }
 
+type SummaryCardFilter =
+  | { role: 'all' | 'administrator' | 'subscriber' | 'tutor_instructor'; status: 'all' | 'active' | 'suspended' }
+
 type UserMode = 'normal' | 'bulk'
 type CreateBulkMode = 'actions' | 'create'
+type StudentsTab = 'users' | 'history'
 
 interface PendingCreateUser {
   username: string
@@ -74,6 +91,8 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
   const [singleLoading, setSingleLoading] = useState(false)
   const [singleMessage, setSingleMessage] = useState<string | null>(null)
   const [singleError, setSingleError] = useState<string | null>(null)
+  const [recentActions, setRecentActions] = useState<WordPressUserAction[]>([])
+  const [activeTab, setActiveTab] = useState<StudentsTab>('users')
   const perPage = 20
 
   const canManageUsers = userRole === 'ADMIN' || userPermissions.includes('wordpress:manage_users')
@@ -84,19 +103,32 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
   }, [search])
 
   useEffect(() => { fetchAllStudents() }, [])
-  useEffect(() => { fetchStudents() }, [page, roleFilter, searchTerm])
+  useEffect(() => { fetchStudents() }, [page, roleFilter, searchTerm, statusFilter])
   useEffect(() => { setPage(1) }, [searchTerm, roleFilter, statusFilter])
   useEffect(() => {
     setSelectedUserIds([])
     setBulkMessage(null)
     setBulkError(null)
   }, [mode])
+  useEffect(() => {
+    if (students.length > 0 && roleStats.all === 0) {
+      calculateStats(students)
+    }
+  }, [students, roleStats.all])
 
   const fetchAllStudents = async () => {
     try {
-      const res = await fetch('/api/wordpress/users?per_page=100')
+      const res = await fetch('/api/wordpress/users/stats')
       const data = await res.json()
-      if (res.ok) calculateStats(data.users || [])
+      if (res.ok && typeof data.total === 'number') {
+        setRoleStats({
+          all: data.total,
+          administrator: data.roles?.administrator || 0,
+          subscriber: data.roles?.subscriber || 0,
+          tutor_instructor: data.roles?.tutor_instructor || 0,
+          suspended: data.suspended || 0,
+        })
+      }
     } catch {}
   }
 
@@ -117,18 +149,72 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
       const params = new URLSearchParams({ page: page.toString(), per_page: perPage.toString() })
       if (roleFilter !== 'all') params.append('role', roleFilter)
       if (searchTerm.trim()) params.append('search', searchTerm.trim())
+      if (statusFilter === 'suspended') params.append('status', 'suspended')
       const res = await fetch(`/api/wordpress/users?${params}`)
       const data = await res.json()
-      if (res.ok) setStudents(data.users || [])
+      if (res.ok) {
+        setStudents(data.users || [])
+        setRecentActions(data.recentActions || [])
+      }
     } catch {}
     finally { setLoading(false) }
   }
 
+  const formatDateTime = (value: string) =>
+    new Date(value).toLocaleString('es-MX', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+  const getActionLabel = (event: string, actorEmail: string) => {
+    switch (event) {
+      case 'created':
+        return `Creado por ${actorEmail}`
+      case 'suspended':
+        return `Inhabilitado por ${actorEmail}`
+      case 'unsuspended':
+        return `Habilitado por ${actorEmail}`
+      case 'deleted':
+        return `Eliminado por ${actorEmail}`
+      default:
+        return `${event} por ${actorEmail}`
+    }
+  }
+
+  const historyRows: EntityHistoryRow[] = recentActions.slice(0, 20).map((action) => ({
+    id: action.id,
+    createdAt: action.createdAt,
+    actorLabel: action.actorEmail,
+    actionLabel: getActionLabel(action.event, action.actorEmail),
+    targetLabel: action.targetName || action.targetEmail,
+    targetSubLabel: action.targetEmail,
+    details:
+      action.event === 'created'
+        ? 'Usuario creado en WordPress.'
+        : action.event === 'suspended'
+          ? 'Usuario inhabilitado desde el panel.'
+          : action.event === 'unsuspended'
+            ? 'Usuario habilitado nuevamente.'
+            : action.event === 'deleted'
+              ? 'Usuario eliminado de WordPress.'
+              : null,
+  }))
+
   const filtered = students.filter(s => {
     if (statusFilter === 'active') return !s.isSuspended
-    if (statusFilter === 'suspended') return s.isSuspended
+    // 'suspended' is filtered server-side; no need to filter again
     return true
   })
+
+  const applySummaryFilter = (filter: SummaryCardFilter) => {
+    setActiveTab('users')
+    setRoleFilter(filter.role)
+    setStatusFilter(filter.status)
+    setPage(1)
+  }
 
   const visibleIds = filtered.map((u) => u.id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedUserIds.includes(id))
@@ -362,13 +448,35 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          { label: 'Total', value: roleStats.all, Icon: Users, iconClass: 'text-blue-600 dark:text-blue-400', wrapperClass: 'bg-blue-100 dark:bg-blue-900/30' },
-          { label: 'Administradores', value: roleStats.administrator, Icon: Building2, iconClass: 'text-red-600 dark:text-red-400', wrapperClass: 'bg-red-100 dark:bg-red-900/30' },
-          { label: 'Instructores', value: roleStats.tutor_instructor, Icon: GraduationCap, iconClass: 'text-purple-600 dark:text-purple-400', wrapperClass: 'bg-purple-100 dark:bg-purple-900/30' },
-          { label: 'Suspendidos', value: roleStats.suspended, Icon: UserX, iconClass: 'text-orange-600 dark:text-orange-400', wrapperClass: 'bg-orange-100 dark:bg-orange-900/30' },
-        ].map(({ label, value, Icon, iconClass, wrapperClass }) => (
-          <div key={label} className="rounded-lg bg-white p-4 shadow dark:bg-slate-800">
+        {([
+          { label: 'Total', value: roleStats.all, Icon: Users, iconClass: 'text-blue-600 dark:text-blue-400', wrapperClass: 'bg-blue-100 dark:bg-blue-900/30', filter: { role: 'all', status: 'all' as const } },
+          { label: 'Administradores', value: roleStats.administrator, Icon: Building2, iconClass: 'text-red-600 dark:text-red-400', wrapperClass: 'bg-red-100 dark:bg-red-900/30', filter: { role: 'administrator', status: 'all' as const } },
+          { label: 'Instructores', value: roleStats.tutor_instructor, Icon: GraduationCap, iconClass: 'text-purple-600 dark:text-purple-400', wrapperClass: 'bg-purple-100 dark:bg-purple-900/30', filter: { role: 'tutor_instructor', status: 'all' as const } },
+          { label: 'Suspendidos', value: roleStats.suspended, Icon: UserX, iconClass: 'text-orange-600 dark:text-orange-400', wrapperClass: 'bg-orange-100 dark:bg-orange-900/30', filter: { role: 'all', status: 'suspended' as const } },
+        ] satisfies Array<{
+          label: string
+          value: number
+          Icon: typeof Users
+          iconClass: string
+          wrapperClass: string
+          filter: SummaryCardFilter
+        }>).map(({ label, value, Icon, iconClass, wrapperClass, filter }) => {
+          const isActive =
+            activeTab === 'users' &&
+            roleFilter === filter.role &&
+            statusFilter === filter.status
+
+          return (
+          <button
+            type="button"
+            key={label}
+            onClick={() => applySummaryFilter(filter)}
+            className={`rounded-lg bg-white p-4 text-left shadow transition-colors dark:bg-slate-800 ${
+              isActive
+                ? 'ring-2 ring-blue-500'
+                : 'hover:bg-gray-50 dark:hover:bg-slate-700/60'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
@@ -378,11 +486,48 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
                 <Icon className={`h-5 w-5 ${iconClass}`} />
               </div>
             </div>
-          </div>
-        ))}
+          </button>
+        )})}
       </div>
 
       <div className="rounded-lg bg-white shadow dark:bg-slate-800">
+        <div className="border-b border-gray-200 p-2 dark:border-slate-700">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('users')}
+              className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                activeTab === 'users'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              Usuarios
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                activeTab === 'history'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              Historial
+            </button>
+          </div>
+        </div>
+
+        {activeTab === 'history' ? (
+          <EntityHistoryPanel
+            title="Historial de Usuarios WordPress"
+            description="Consulta quien creo, inhabilito, habilito o elimino usuarios y sobre que cuenta se aplico."
+            countLabel={`${historyRows.length} registros`}
+            rows={historyRows}
+            emptyMessage="Aun no hay movimientos registrados de usuarios WP."
+          />
+        ) : (
+        <>
         <div className="border-b border-gray-200 px-4 pt-3 dark:border-slate-700">
           <div className="flex flex-wrap gap-1 pb-3">
             {[
@@ -646,6 +791,12 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
                         )}
                       </div>
                       <p className="mt-0.5 truncate text-xs text-gray-400">{user.email}</p>
+                      {(user.createdByName || user.suspendedByName) && (
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
+                          {user.createdByName && <span>Creado por: {user.createdByName}</span>}
+                          {user.suspendedByName && <span>Inhabilitado por: {user.suspendedByName}</span>}
+                        </div>
+                      )}
                     </div>
                     <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-300 transition-colors group-hover:text-gray-500" />
                   </div>
@@ -667,6 +818,8 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
               Siguiente
             </button>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

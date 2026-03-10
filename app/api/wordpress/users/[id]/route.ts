@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { wpUserService } from '@/lib/wordpress/users'
 import { prisma } from '@/lib/prisma'
 import { canManageTuitionStatus, canViewWordPressUsers } from '@/lib/permissions'
+import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
+import { getEffectiveSuspensionState, syncWordPressSuspensionState } from '@/lib/wordpress/suspension-sync'
 
 /**
  * GET /api/wordpress/users/[id]
@@ -28,18 +30,27 @@ export async function GET(
 
     const userId = parseInt(params.id)
     const user = await wpUserService.getUser(userId)
+    const suspensionStatus = await wpUserService.getSuspensionStatus(userId).catch(() => null)
+    const userWithSuspension = {
+      ...user,
+      is_suspended: suspensionStatus?.suspended ?? user.is_suspended,
+      suspension_reason: suspensionStatus?.reason ?? user.suspension_reason,
+      suspended_at: suspensionStatus?.suspended_at ?? user.suspended_at,
+    }
+    await syncWordPressSuspensionState([userWithSuspension])
 
     // Merge con estado de suspensión local
     const localUser = await prisma.wordPressUser.findFirst({
       where: { id: userId, deletedAt: null },
     })
+    const effectiveSuspension = getEffectiveSuspensionState(userWithSuspension, localUser)
 
     return NextResponse.json({
       user: {
-        ...user,
-        isSuspended: localUser?.isSuspended || false,
-        suspensionReason: localUser?.suspensionReason || null,
-        suspendedAt: localUser?.suspendedAt || null,
+        ...userWithSuspension,
+        isSuspended: effectiveSuspension.isSuspended,
+        suspensionReason: effectiveSuspension.suspensionReason,
+        suspendedAt: effectiveSuspension.suspendedAt,
         paymentStatus: localUser?.paymentStatus || 'CURRENT',
         paymentNotes: localUser?.paymentNotes || null,
         paymentUpdatedAt: localUser?.paymentUpdatedAt || null,
@@ -118,10 +129,7 @@ export async function DELETE(
 
     const result = await wpUserService.deleteUser(userId, reassign)
 
-    const currentUser = await prisma.user.findFirst({
-      where: { email: session.user.email || '', deletedAt: null },
-      select: { id: true, email: true },
-    })
+    const currentUser = await getSessionAuditActor(session)
 
     const localUser = await prisma.wordPressUser.findFirst({
       where: { id: userId, deletedAt: null },
@@ -158,6 +166,20 @@ export async function DELETE(
               wordPressUserId: localUser.id,
               tombstoneEmail,
             },
+          },
+        })
+
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: localUser.email,
+          targetName: localUser.name || null,
+          entity: 'WORDPRESS_USER',
+          entityId: String(localUser.id),
+          event: 'deleted',
+          details: {
+            mode: 'single',
+            reassign: reassign || null,
           },
         })
       }

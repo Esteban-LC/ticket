@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Search, Trash2, UserPlus, UserRoundX, Wallet } from 'lucide-react'
+import EntityHistoryPanel, { EntityHistoryRow } from '@/components/shared/EntityHistoryPanel'
 
 type PaymentStatus = 'CURRENT' | 'OVERDUE' | 'DROPPED'
 type TuitionSourceType = 'WORKSPACE' | 'WORDPRESS'
 type TuitionView = 'pending' | 'completed' | 'register' | 'bulk'
+type TuitionTab = 'operate' | 'history'
 
 interface TuitionSourceUser {
   sourceType: TuitionSourceType
@@ -33,6 +35,13 @@ interface TuitionFollowUp {
   completedAt: string | null
   completedByEmail: string | null
   createdAt: string
+  history?: Array<{
+    id: string
+    event: string
+    actorEmail: string
+    createdAt: string
+    details?: Record<string, unknown>
+  }>
 }
 
 interface FollowUpCounts {
@@ -82,6 +91,7 @@ const EMPTY_COUNTS: FollowUpCounts = {
 export default function WordPressTuitionClient({ userRole }: WordPressTuitionClientProps) {
   const canCreateRecords = userRole !== 'ADMIN'
   const [activeView, setActiveView] = useState<TuitionView>(canCreateRecords ? 'register' : 'pending')
+  const [activeTab, setActiveTab] = useState<TuitionTab>('operate')
 
   const [pendingRecords, setPendingRecords] = useState<TuitionFollowUp[]>([])
   const [completedRecords, setCompletedRecords] = useState<TuitionFollowUp[]>([])
@@ -370,6 +380,44 @@ export default function WordPressTuitionClient({ userRole }: WordPressTuitionCli
     })
   }
 
+  const getHistoryEventLabel = (event: string) => {
+    switch (event) {
+      case 'created':
+        return 'Registro creado'
+      case 'completed':
+        return 'Marcado como atendido'
+      case 'reopened':
+        return 'Reabierto'
+      case 'deleted':
+        return 'Eliminado'
+      default:
+        return event
+    }
+  }
+
+  const historyRows: EntityHistoryRow[] = [...pendingRecords, ...completedRecords]
+    .flatMap((item) =>
+      (item.history || []).map((entry) => ({
+        id: entry.id,
+        createdAt: entry.createdAt,
+        actorLabel: entry.actorEmail,
+        actionLabel:
+          entry.event === 'created'
+            ? `Tomado por ${entry.actorEmail}`
+            : entry.event === 'completed'
+              ? `Completado por ${entry.actorEmail}`
+              : entry.event === 'reopened'
+                ? `Reabierto por ${entry.actorEmail}`
+                : entry.event === 'deleted'
+                  ? `Eliminado por ${entry.actorEmail}`
+                  : `${getHistoryEventLabel(entry.event)} por ${entry.actorEmail}`,
+        targetLabel: item.studentName || item.studentUsername || item.studentEmail,
+        targetSubLabel: item.studentEmail,
+        details: item.notes || `Estado: ${STATUS_META[item.status].label}`,
+      }))
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
   const selectedCount = sourceUsers.filter((user) => selectedUsers[user.sourceType + ':' + user.sourceExternalId]).length
   const allVisibleSelected = sourceUsers.length > 0 && selectedCount === sourceUsers.length
   const sourceStart = sourceTotal === 0 ? 0 : (sourcePage - 1) * 10 + 1
@@ -423,7 +471,7 @@ export default function WordPressTuitionClient({ userRole }: WordPressTuitionCli
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Origen</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Estado</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Notas</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Registro</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Registro y bitacora</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Acciones</th>
             </tr>
           </thead>
@@ -452,6 +500,20 @@ export default function WordPressTuitionClient({ userRole }: WordPressTuitionCli
                     <div>Por: {item.createdByEmail || '-'}</div>
                     {item.completedAt && <div>Cierre: {formatDate(item.completedAt)}</div>}
                     {item.completedByEmail && <div>Cerro: {item.completedByEmail}</div>}
+                    {item.history && item.history.length > 0 && (
+                      <div className="mt-2 space-y-1 rounded-lg bg-gray-50 p-2 dark:bg-slate-900/50">
+                        {item.history.slice(0, 4).map((entry) => (
+                          <div key={entry.id}>
+                            <div className="text-[11px] font-medium text-gray-700 dark:text-gray-200">
+                              {getHistoryEventLabel(entry.event)}
+                            </div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                              {entry.actorEmail} · {formatDate(entry.createdAt)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
@@ -498,6 +560,43 @@ export default function WordPressTuitionClient({ userRole }: WordPressTuitionCli
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border border-gray-200 bg-white p-2 shadow dark:border-slate-700 dark:bg-slate-800">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('operate')}
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              activeTab === 'operate'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+            }`}
+          >
+            Operacion
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              activeTab === 'history'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+            }`}
+          >
+            Historial
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'history' ? (
+        <EntityHistoryPanel
+          title="Historial de Cobranza"
+          description="Consulta quien tomo, completo, reabrio o elimino un seguimiento de cobranza y la fecha del movimiento."
+          countLabel={`${historyRows.length} registros`}
+          rows={historyRows}
+          emptyMessage="Aun no hay movimientos registrados en cobranza."
+        />
+      ) : (
+      <>
       <div className="rounded-lg bg-white shadow dark:bg-slate-800">
         <div className="border-b border-gray-200 p-4 dark:border-slate-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Seguimiento de avisos</h2>
@@ -585,29 +684,31 @@ export default function WordPressTuitionClient({ userRole }: WordPressTuitionCli
         </div>
 
         {activeView !== 'register' && activeView !== 'bulk' && (
-          <div className="flex flex-col gap-3 border-b border-gray-200 p-4 lg:flex-row lg:items-center dark:border-slate-700">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={recordsSearch}
-                onChange={(event) => setRecordsSearch(event.target.value)}
-                placeholder="Buscar en seguimiento..."
-                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-              />
-            </div>
+          <div className="border-b border-gray-200 dark:border-slate-700">
+            <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={recordsSearch}
+                  onChange={(event) => setRecordsSearch(event.target.value)}
+                  placeholder="Buscar en seguimiento..."
+                  className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                />
+              </div>
 
-            <button
-              type="button"
-              onClick={() => setRecordsStatus('all')}
-              className={`rounded-lg px-3 py-2 text-xs font-medium ${
-                recordsStatus === 'all'
-                  ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600'
-              }`}
-            >
-              Todos
-            </button>
+              <button
+                type="button"
+                onClick={() => setRecordsStatus('all')}
+                className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                  recordsStatus === 'all'
+                    ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                Todos
+              </button>
+            </div>
           </div>
         )}
 
@@ -861,6 +962,8 @@ export default function WordPressTuitionClient({ userRole }: WordPressTuitionCli
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }

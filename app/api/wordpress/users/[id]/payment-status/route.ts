@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canManageTuitionStatus } from '@/lib/permissions'
+import { logEntityAudit } from '@/lib/audit-log'
 
 const VALID_STATUSES = new Set(['CURRENT', 'OVERDUE', 'DROPPED'])
 
@@ -46,6 +47,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Email requerido para registrar estado de pago' }, { status: 400 })
     }
 
+    const previous = await prisma.wordPressUser.findUnique({
+      where: { id: userId },
+      select: {
+        paymentStatus: true,
+        paymentNotes: true,
+      },
+    })
+
     const updated = await prisma.wordPressUser.upsert({
       where: { id: userId },
       update: {
@@ -77,6 +86,24 @@ export async function PATCH(
         paymentUpdatedBy: true,
       },
     })
+
+    if (currentUser?.id && currentUser.email) {
+      await logEntityAudit({
+        adminId: currentUser.id,
+        adminEmail: currentUser.email,
+        targetEmail: email,
+        targetName: name || username || null,
+        entity: 'WORDPRESS_PAYMENT_STATUS',
+        entityId: String(userId),
+        event: 'payment_status_updated',
+        details: {
+          previousStatus: previous?.paymentStatus || null,
+          newStatus: updated.paymentStatus,
+          previousNotes: previous?.paymentNotes || null,
+          newNotes: updated.paymentNotes,
+        },
+      })
+    }
 
     return NextResponse.json({ user: updated })
   } catch (error: any) {

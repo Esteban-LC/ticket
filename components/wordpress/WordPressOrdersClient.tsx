@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
+import EntityHistoryPanel, { EntityHistoryRow } from '@/components/shared/EntityHistoryPanel'
 
 interface LineItem {
   id: number
@@ -28,6 +29,13 @@ interface Order {
   line_items: LineItem[]
   fee_lines?: FeeLine[]
   customer_note?: string
+  auditTrail?: Array<{
+    id: string
+    event: string
+    actorEmail: string
+    createdAt: string
+    details?: Record<string, unknown>
+  }>
 }
 
 interface Props {
@@ -35,7 +43,18 @@ interface Props {
   userPermissions: string[]
 }
 
+interface OrderAuditAction {
+  id: string
+  entityId: string
+  event: string
+  actorEmail: string
+  createdAt: string
+  targetName: string | null
+  details?: Record<string, unknown>
+}
+
 type BulkAction = '' | 'processing' | 'on-hold' | 'completed' | 'cancelled'
+type OrdersTab = 'orders' | 'history'
 
 const STATUS_FILTERS = [
   { key: '', label: 'Todos' },
@@ -64,6 +83,8 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
   const [bulkLoading, setBulkLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [recentActions, setRecentActions] = useState<OrderAuditAction[]>([])
+  const [activeTab, setActiveTab] = useState<OrdersTab>('orders')
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
@@ -92,6 +113,66 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
     return isNaN(d.getTime()) ? value : d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
+  const formatDateTime = (value: string) => {
+    const d = new Date(value)
+    return isNaN(d.getTime())
+      ? value
+      : d.toLocaleString('es-MX', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+  }
+
+  const getAuditEventLabel = (event: string) => {
+    switch (event) {
+      case 'created':
+        return 'Pedido creado'
+      case 'status_updated':
+        return 'Estado actualizado'
+      default:
+        return event
+    }
+  }
+
+  const getActionSummary = (action: OrderAuditAction) => {
+    if (action.event === 'created') {
+      return `Pedido generado por ${action.actorEmail}`
+    }
+    if (action.event === 'status_updated') {
+      if (action.details?.newStatus === 'completed') {
+        return `Acreditado por ${action.actorEmail}`
+      }
+      if (action.details?.newStatus === 'cancelled') {
+        return `Cancelado por ${action.actorEmail}`
+      }
+      return `Actualizado por ${action.actorEmail}`
+    }
+    return `${action.event} por ${action.actorEmail}`
+  }
+
+  const historyRows = useMemo<EntityHistoryRow[]>(
+    () =>
+      recentActions.map((action) => ({
+        id: action.id,
+        createdAt: action.createdAt,
+        actorLabel: action.actorEmail,
+        actionLabel: getActionSummary(action),
+        targetLabel: action.targetName || `Pedido #${action.entityId}`,
+        details:
+          action.event === 'created'
+            ? 'Pedido generado desde enrolamiento o desde el panel administrativo.'
+            : action.details?.newStatus === 'completed'
+            ? 'Pedido acreditado para continuar el flujo del alumno.'
+            : action.details?.newStatus === 'cancelled'
+              ? 'Pedido cancelado desde el panel.'
+              : 'Pedido actualizado desde el panel.',
+      })),
+    [recentActions]
+  )
+
   const getOrderItemNames = (order: Order) =>
     [...(order.line_items || []), ...(order.fee_lines || [])]
       .map((item) => item.name?.trim())
@@ -106,6 +187,7 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al cargar pedidos')
       setOrders(data.orders || [])
+      setRecentActions(data.recentActions || [])
       setSelectedOrderIds([])
     } catch (e: any) {
       setError(e.message || 'Error al cargar pedidos')
@@ -184,7 +266,7 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'No se pudo actualizar la orden')
 
-      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: data.order?.status || status } : o)))
+      await fetchOrders()
       setSuccess(status === 'completed' ? `Orden #${orderId} acreditada` : `Orden #${orderId} cancelada`)
     } catch (e: any) {
       setError(e.message || 'Error al actualizar orden')
@@ -216,9 +298,7 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
       const failed = results.filter((r) => !r.ok)
 
       if (okIds.length > 0) {
-        setOrders((prev) =>
-          prev.map((o) => (okIds.includes(o.id) ? { ...o, status: bulkAction } : o))
-        )
+        await fetchOrders()
       }
 
       setSelectedOrderIds([])
@@ -346,6 +426,42 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
         </div>
       )}
 
+      <div className="rounded-lg border border-gray-200 bg-white p-2 shadow dark:border-slate-700 dark:bg-slate-800">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('orders')}
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              activeTab === 'orders'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+            }`}
+          >
+            Pedidos
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              activeTab === 'history'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+            }`}
+          >
+            Historial
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'history' ? (
+        <EntityHistoryPanel
+          title="Historial de Pedidos"
+          description="Consulta quien acredito, cancelo o actualizo un pedido y cuando ocurrio el movimiento."
+          countLabel={`${historyRows.length} registros`}
+          rows={historyRows}
+          emptyMessage="Aun no hay movimientos registrados en pedidos."
+        />
+      ) : (
       <div className="rounded-lg border border-gray-200 bg-white shadow dark:border-slate-700 dark:bg-slate-800">
         {loading ? (
           <div className="p-10 text-center">
@@ -402,6 +518,19 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
                             </p>
                           ) : null
                         })()}
+                        {order.auditTrail && order.auditTrail.length > 0 && (
+                          <div className="mt-2 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] text-gray-600 dark:bg-slate-900/50 dark:text-gray-300">
+                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                              Bitacora
+                            </div>
+                            {order.auditTrail.slice(0, 3).map((entry) => (
+                              <div key={entry.id} className="mb-1 last:mb-0">
+                                <span className="font-medium">{getAuditEventLabel(entry.event)}:</span>{' '}
+                                {entry.actorEmail} · {formatDateTime(entry.createdAt)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -437,6 +566,7 @@ export default function WordPressOrdersClient({ userRole, userPermissions }: Pro
           </>
         )}
       </div>
+      )}
     </div>
   )
 }

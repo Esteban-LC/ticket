@@ -182,6 +182,39 @@ add_action('rest_api_init', function () {
             ),
         ),
     ));
+
+    register_rest_route('custom/v1', '/users/(?P<id>\d+)/suspension-debug', array(
+        'methods' => 'GET',
+        'callback' => 'custom_get_suspension_debug',
+        'permission_callback' => function () {
+            return current_user_can('edit_users');
+        },
+        'args' => array(
+            'id' => array(
+                'validate_callback' => function ($param) {
+                    return is_numeric($param);
+                }
+            ),
+        ),
+    ));
+
+    // Endpoint to get aggregate user stats (totals by role + suspended count)
+    register_rest_route('custom/v1', '/users/stats', array(
+        'methods' => 'GET',
+        'callback' => 'custom_get_users_stats',
+        'permission_callback' => function () {
+            return current_user_can('edit_users');
+        },
+    ));
+
+    // Endpoint to list all suspended users
+    register_rest_route('custom/v1', '/users/suspended', array(
+        'methods' => 'GET',
+        'callback' => 'custom_get_suspended_users_list',
+        'permission_callback' => function () {
+            return current_user_can('edit_users');
+        },
+    ));
 });
 
 /**
@@ -719,6 +752,144 @@ function custom_unenroll_user_from_course($request) {
 /**
  * Suspend a user
  */
+function custom_get_effective_suspension_data($user_id) {
+    $user_id = intval($user_id);
+    $user = get_user_by('ID', $user_id);
+
+    if (!$user) {
+        return array(
+            'suspended' => false,
+            'source' => null,
+            'reason' => null,
+            'suspended_at' => null,
+            'suspended_by' => null,
+        );
+    }
+
+    $candidate_flags = array(
+        'account_suspended',
+        'account_disabled',
+        'wpduact_account_disabled',
+        'is_disabled',
+        'disabled',
+        '_disabled',
+        'disable_user',
+        'wpduact_status',
+    );
+
+    foreach ($candidate_flags as $meta_key) {
+        $raw_value = get_user_meta($user_id, $meta_key, true);
+
+        if ($raw_value === '' || $raw_value === null) {
+            continue;
+        }
+
+        $normalized = is_string($raw_value) ? strtolower(trim($raw_value)) : $raw_value;
+        $is_disabled = !in_array($normalized, array(false, 0, '0', '', 'false', 'no', 'enabled', 'active', 'normal'), true);
+
+        if ($is_disabled) {
+            return array(
+                'suspended' => true,
+                'source' => $meta_key,
+                'reason' => get_user_meta($user_id, 'suspension_reason', true) ?: null,
+                'suspended_at' => get_user_meta($user_id, 'suspended_at', true) ?: null,
+                'suspended_by' => get_user_meta($user_id, 'suspended_by', true) ?: null,
+            );
+        }
+    }
+
+    if (isset($user->user_status) && intval($user->user_status) !== 0) {
+        return array(
+            'suspended' => true,
+            'source' => 'user_status',
+            'reason' => get_user_meta($user_id, 'suspension_reason', true) ?: null,
+            'suspended_at' => get_user_meta($user_id, 'suspended_at', true) ?: null,
+            'suspended_by' => get_user_meta($user_id, 'suspended_by', true) ?: null,
+        );
+    }
+
+    return array(
+        'suspended' => false,
+        'source' => null,
+        'reason' => null,
+        'suspended_at' => null,
+        'suspended_by' => null,
+    );
+}
+
+function custom_get_all_suspended_user_ids() {
+    global $wpdb;
+
+    $meta_ids = $wpdb->get_col(
+        "SELECT DISTINCT user_id
+         FROM {$wpdb->usermeta}
+         WHERE meta_key IN (
+             'account_suspended',
+             'account_disabled',
+             'wpduact_account_disabled',
+             'is_disabled',
+             'disabled',
+             '_disabled',
+             'disable_user',
+             'wpduact_status'
+         )
+         AND meta_value NOT IN ('', '0', 'false', 'no', 'enabled', 'active', 'normal')"
+    );
+
+    $status_ids = $wpdb->get_col(
+        "SELECT ID FROM {$wpdb->users} WHERE user_status != 0"
+    );
+
+    $candidate_ids = array_values(array_unique(array_merge(
+        array_map('intval', (array) $meta_ids),
+        array_map('intval', (array) $status_ids)
+    )));
+
+    $effective_ids = array();
+    foreach ($candidate_ids as $user_id) {
+        $suspension_data = custom_get_effective_suspension_data($user_id);
+        if (!empty($suspension_data['suspended'])) {
+            $effective_ids[] = intval($user_id);
+        }
+    }
+
+    return array_values(array_unique($effective_ids));
+}
+
+function custom_get_suspension_debug($request) {
+    $user_id = intval($request['id']);
+    $user = get_user_by('ID', $user_id);
+
+    if (!$user) {
+        return new WP_Error('user_not_found', 'User not found', array('status' => 404));
+    }
+
+    $all_meta = get_user_meta($user_id);
+    $interesting_meta = array();
+
+    foreach ($all_meta as $meta_key => $values) {
+        $normalized_key = strtolower((string) $meta_key);
+        if (
+            strpos($normalized_key, 'suspend') !== false ||
+            strpos($normalized_key, 'disable') !== false ||
+            strpos($normalized_key, 'inactive') !== false ||
+            strpos($normalized_key, 'status') !== false ||
+            strpos($normalized_key, 'approved') !== false
+        ) {
+            $interesting_meta[$meta_key] = $values;
+        }
+    }
+
+    return array(
+        'user_id' => $user_id,
+        'user_email' => $user->user_email,
+        'user_login' => $user->user_login,
+        'user_status' => isset($user->user_status) ? intval($user->user_status) : null,
+        'effective_suspension' => custom_get_effective_suspension_data($user_id),
+        'interesting_meta' => $interesting_meta,
+    );
+}
+
 function custom_suspend_user($request) {
     $user_id = $request['id'];
     $reason = $request->get_param('reason') ?: 'No reason provided';
@@ -791,15 +962,66 @@ function custom_get_suspension_status($request) {
         return new WP_Error('user_not_found', 'User not found', array('status' => 404));
     }
 
-    $is_suspended = get_user_meta($user_id, 'account_suspended', true);
+    $suspension_data = custom_get_effective_suspension_data($user_id);
 
     return array(
         'user_id' => $user_id,
-        'suspended' => (bool) $is_suspended,
-        'reason' => $is_suspended ? get_user_meta($user_id, 'suspension_reason', true) : null,
-        'suspended_at' => $is_suspended ? get_user_meta($user_id, 'suspended_at', true) : null,
-        'suspended_by' => $is_suspended ? get_user_meta($user_id, 'suspended_by', true) : null,
+        'suspended' => !empty($suspension_data['suspended']),
+        'reason' => $suspension_data['reason'],
+        'suspended_at' => $suspension_data['suspended_at'],
+        'suspended_by' => $suspension_data['suspended_by'],
+        'source' => $suspension_data['source'],
     );
+}
+
+/**
+ * Get aggregate user stats: totals by role and count of suspended/disabled users.
+ */
+function custom_get_users_stats() {
+    $counts = count_users();
+
+    // Dos queries simples en lugar de UNION para máxima compatibilidad con MySQL.
+    // Cubre usuarios suspendidos por este plugin Y por otros plugins comunes
+    // (WP Disable User Accounts, Disable Users, etc.).
+    $suspended_count = count(custom_get_all_suspended_user_ids());
+
+    return array(
+        'total'     => intval($counts['total_users']),
+        'roles'     => $counts['avail_roles'],
+        'suspended' => $suspended_count,
+    );
+}
+
+/**
+ * List all suspended users with basic profile data.
+ */
+function custom_get_suspended_users_list() {
+    $user_ids = custom_get_all_suspended_user_ids();
+
+    if (empty($user_ids)) {
+        return array('users' => array(), 'total' => 0);
+    }
+
+    $users = array();
+    foreach ($user_ids as $user_id) {
+        $user = get_userdata($user_id);
+        if (!$user) {
+            continue;
+        }
+        $suspension_data = custom_get_effective_suspension_data($user_id);
+        $users[] = array(
+            'id'               => $user->ID,
+            'username'         => $user->user_login,
+            'name'             => $user->display_name,
+            'email'            => $user->user_email,
+            'roles'            => array_values($user->roles),
+            'is_suspended'     => true,
+            'suspension_reason' => $suspension_data['reason'],
+            'suspended_at'     => $suspension_data['suspended_at'],
+        );
+    }
+
+    return array('users' => $users, 'total' => count($users));
 }
 
 function custom_normalize_user_ids($raw_user_ids) {
@@ -1207,10 +1429,10 @@ add_filter('wp_authenticate_user', function ($user) {
         return $user;
     }
 
-    $is_suspended = get_user_meta($user->ID, 'account_suspended', true);
+    $suspension_data = custom_get_effective_suspension_data($user->ID);
 
-    if ($is_suspended) {
-        $reason = get_user_meta($user->ID, 'suspension_reason', true);
+    if (!empty($suspension_data['suspended'])) {
+        $reason = $suspension_data['reason'];
         $message = 'Tu cuenta ha sido suspendida.';
 
         if ($reason) {
@@ -1222,6 +1444,72 @@ add_filter('wp_authenticate_user', function ($user) {
 
     return $user;
 }, 30, 1);
+
+/**
+ * When login fails on wp-login.php, store suspension message in a short-lived cookie
+ * so it can be displayed to the user.
+ */
+add_action('wp_login_failed', function ($username) {
+    $user = get_user_by('login', $username);
+    if (!$user) {
+        $user = get_user_by('email', $username);
+    }
+    if (!$user) {
+        return;
+    }
+    $suspension = custom_get_effective_suspension_data($user->ID);
+    if (empty($suspension['suspended'])) {
+        return;
+    }
+    $message = 'Tu cuenta ha sido suspendida.';
+    if (!empty($suspension['reason'])) {
+        $message .= ' Razón: ' . $suspension['reason'];
+    }
+    setcookie('liq_suspension_notice', rawurlencode($message), time() + 120, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), false);
+}, 10, 1);
+
+/**
+ * Display the suspension cookie notice on the standard WordPress login page (wp-login.php).
+ */
+add_filter('login_message', function ($message) {
+    if (!empty($_COOKIE['liq_suspension_notice'])) {
+        $msg = rawurldecode(sanitize_text_field(wp_unslash($_COOKIE['liq_suspension_notice'])));
+        setcookie('liq_suspension_notice', '', time() - 3600, COOKIEPATH, COOKIE_DOMAIN, is_ssl());
+        $message .= '<p class="message" style="background:#ffe0e0;color:#7a0000;border:1px solid #ffaaaa;padding:10px 14px;border-radius:4px;margin-bottom:14px;">'
+            . esc_html($msg) . '</p>';
+    }
+    return $message;
+});
+
+/**
+ * WooCommerce fallback: when WooCommerce login fails, store the suspension notice in a
+ * cookie so themes that do not render wc_notices properly still show the message.
+ */
+add_action('woocommerce_login_failed', function () {
+    $username = isset($_POST['username']) ? sanitize_text_field($_POST['username']) : '';
+    if (empty($username)) {
+        return;
+    }
+    $user = get_user_by('login', $username);
+    if (!$user) {
+        $user = get_user_by('email', $username);
+    }
+    if (!$user) {
+        return;
+    }
+    $suspension = custom_get_effective_suspension_data($user->ID);
+    if (empty($suspension['suspended'])) {
+        return;
+    }
+    $message = 'Tu cuenta ha sido suspendida.';
+    if (!empty($suspension['reason'])) {
+        $message .= ' Razón: ' . $suspension['reason'];
+    }
+    if (function_exists('wc_add_notice')) {
+        wc_add_notice($message, 'error');
+    }
+    setcookie('liq_suspension_notice', rawurlencode($message), time() + 120, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), false);
+});
 
 /**
  * Get enrolled courses for a user (Tutor LMS)
@@ -1486,13 +1774,14 @@ function custom_get_course_students($request) {
  * Add suspension info to user REST API response
  */
 add_filter('rest_prepare_user', function ($response, $user) {
-    $is_suspended = get_user_meta($user->ID, 'account_suspended', true);
+    $suspension_data = custom_get_effective_suspension_data($user->ID);
 
-    $response->data['is_suspended'] = (bool) $is_suspended;
+    $response->data['is_suspended'] = !empty($suspension_data['suspended']);
+    $response->data['suspension_source'] = $suspension_data['source'];
 
-    if ($is_suspended) {
-        $response->data['suspension_reason'] = get_user_meta($user->ID, 'suspension_reason', true);
-        $response->data['suspended_at'] = get_user_meta($user->ID, 'suspended_at', true);
+    if (!empty($suspension_data['suspended'])) {
+        $response->data['suspension_reason'] = $suspension_data['reason'];
+        $response->data['suspended_at'] = $suspension_data['suspended_at'];
     }
 
     return $response;

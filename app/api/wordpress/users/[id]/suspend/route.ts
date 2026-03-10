@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { wpUserService } from '@/lib/wordpress/users'
+import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
 
 /**
  * POST /api/wordpress/users/[id]/suspend
@@ -27,9 +28,7 @@ export async function POST(
     const wordpressUserId = parseInt(params.id)
     const { reason } = await request.json()
 
-    const currentUser = await prisma.user.findFirst({
-      where: { email: session.user.email || '', deletedAt: null }
-    })
+    const currentUser = await getSessionAuditActor(session)
 
     if (!currentUser) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
@@ -97,6 +96,20 @@ export async function POST(
       },
     })
 
+    await logEntityAudit({
+      adminId: currentUser.id,
+      adminEmail: currentUser.email,
+      targetEmail: wpUserData.email || `wp_user_${wordpressUserId}@temp.local`,
+      targetName: wpUserData.name || wpUserData.username || null,
+      entity: 'WORDPRESS_USER',
+      entityId: String(wordpressUserId),
+      event: 'suspended',
+      details: {
+        reason: reason || '',
+        mode: 'single',
+      },
+    })
+
     return NextResponse.json({
       success: true,
       user: wpUser,
@@ -133,9 +146,7 @@ export async function DELETE(
 
     const wordpressUserId = parseInt(params.id)
 
-    const currentUser = await prisma.user.findFirst({
-      where: { email: session.user.email || '', deletedAt: null }
-    })
+    const currentUser = await getSessionAuditActor(session)
 
     if (!currentUser) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
@@ -199,6 +210,19 @@ export async function DELETE(
           wordpressUserId,
           wordpressResponse: wpResponse,
         },
+      },
+    })
+
+    await logEntityAudit({
+      adminId: currentUser.id,
+      adminEmail: currentUser.email,
+      targetEmail: wpUserData.email || `wp_user_${wordpressUserId}@temp.local`,
+      targetName: wpUserData.name || wpUserData.username || null,
+      entity: 'WORDPRESS_USER',
+      entityId: String(wordpressUserId),
+      event: 'unsuspended',
+      details: {
+        mode: 'single',
       },
     })
 
