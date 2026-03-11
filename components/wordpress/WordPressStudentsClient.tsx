@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Search, Users, GraduationCap, Building2, ChevronRight, UserX, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import EntityHistoryPanel, { EntityHistoryRow } from '@/components/shared/EntityHistoryPanel'
 
 interface WordPressUser {
@@ -55,10 +55,75 @@ interface PendingCreateUser {
   password?: string
 }
 
+const FILTER_STORAGE_KEY = 'wordpress-students-filters'
+
+const parseRoleFilter = (value: string | null) =>
+  value === 'administrator' || value === 'subscriber' || value === 'tutor_instructor' ? value : 'all'
+
+const parseStatusFilter = (value: string | null): 'all' | 'active' | 'suspended' =>
+  value === 'active' || value === 'suspended' ? value : 'all'
+
+const parseTab = (value: string | null): StudentsTab =>
+  value === 'history' ? 'history' : 'users'
+
+const parseMode = (value: string | null): UserMode =>
+  value === 'bulk' ? 'bulk' : 'normal'
+
+const parsePage = (value: string | null) => {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1
+}
+
+const readInitialFilters = () => {
+  if (typeof window === 'undefined') {
+    return {
+      search: '',
+      roleFilter: 'all',
+      statusFilter: 'all' as const,
+      page: 1,
+      activeTab: 'users' as StudentsTab,
+      mode: 'normal' as UserMode,
+    }
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const storedRaw = window.sessionStorage.getItem(FILTER_STORAGE_KEY)
+  let stored: Partial<{
+    search: string
+    roleFilter: string
+    statusFilter: string
+    page: number
+    activeTab: string
+    mode: string
+  }> = {}
+
+  if (storedRaw) {
+    try {
+      stored = JSON.parse(storedRaw) as typeof stored
+    } catch {
+      window.sessionStorage.removeItem(FILTER_STORAGE_KEY)
+    }
+  }
+
+  const search = (params.get('search') ?? stored.search ?? '').trim()
+
+  return {
+    search,
+    roleFilter: parseRoleFilter(params.get('role') ?? stored.roleFilter ?? null),
+    statusFilter: parseStatusFilter(params.get('status') ?? stored.statusFilter ?? null),
+    page: parsePage(params.get('page') ?? String(stored.page ?? 1)),
+    activeTab: parseTab(params.get('tab') ?? stored.activeTab ?? null),
+    mode: parseMode(params.get('mode') ?? stored.mode ?? null),
+  }
+}
+
 export default function WordPressStudentsClient({ userRole, userPermissions }: WordPressStudentsClientProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [students, setStudents] = useState<WordPressUser[]>([])
   const [loading, setLoading] = useState(true)
+  const [filtersReady, setFiltersReady] = useState(false)
   const [search, setSearch] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
@@ -102,9 +167,68 @@ export default function WordPressStudentsClient({ userRole, userPermissions }: W
     return () => clearTimeout(timer)
   }, [search])
 
+  useEffect(() => {
+    const initialFilters = readInitialFilters()
+
+    setSearch(initialFilters.search)
+    setSearchTerm(initialFilters.search)
+    setRoleFilter(initialFilters.roleFilter)
+    setStatusFilter(initialFilters.statusFilter)
+    setPage(initialFilters.page)
+    setActiveTab(initialFilters.activeTab)
+    setMode(initialFilters.mode)
+    setFiltersReady(true)
+  }, [])
+
   useEffect(() => { fetchAllStudents() }, [])
-  useEffect(() => { fetchStudents() }, [page, roleFilter, searchTerm, statusFilter])
-  useEffect(() => { setPage(1) }, [searchTerm, roleFilter, statusFilter])
+  useEffect(() => {
+    if (!filtersReady) return
+    fetchStudents()
+  }, [filtersReady, page, roleFilter, searchTerm, statusFilter])
+  useEffect(() => {
+    if (!filtersReady) return
+    setPage(1)
+  }, [filtersReady, searchTerm, roleFilter, statusFilter])
+  useEffect(() => {
+    if (!filtersReady || typeof window === 'undefined') return
+
+    const params = new URLSearchParams(searchParams.toString())
+
+    if (search.trim()) params.set('search', search.trim())
+    else params.delete('search')
+
+    if (roleFilter !== 'all') params.set('role', roleFilter)
+    else params.delete('role')
+
+    if (statusFilter !== 'all') params.set('status', statusFilter)
+    else params.delete('status')
+
+    if (page > 1) params.set('page', String(page))
+    else params.delete('page')
+
+    if (activeTab !== 'users') params.set('tab', activeTab)
+    else params.delete('tab')
+
+    if (mode !== 'normal') params.set('mode', mode)
+    else params.delete('mode')
+
+    const nextQuery = params.toString()
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname
+    const currentUrl = `${pathname}${window.location.search}`
+
+    if (nextUrl !== currentUrl) {
+      router.replace(nextUrl, { scroll: false })
+    }
+
+    window.sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
+      search: search.trim(),
+      roleFilter,
+      statusFilter,
+      page,
+      activeTab,
+      mode,
+    }))
+  }, [activeTab, filtersReady, mode, page, pathname, roleFilter, router, search, searchParams, statusFilter])
   useEffect(() => {
     setSelectedUserIds([])
     setBulkMessage(null)
