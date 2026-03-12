@@ -22,8 +22,10 @@ import { useSidebar } from '@/contexts/SidebarContext'
 import UserMenu from './UserMenu'
 import {
   canAccessWorkspace,
+  canAccessWordPressEnrollments,
+  canAccessWordPressOrders,
+  canAccessWordPressStudents,
   canManageTuitionStatus,
-  canViewWordPressUsers,
 } from '@/lib/permissions'
 
 interface SidebarProps {
@@ -84,8 +86,7 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
       icon: Users,
       roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'],
       section: 'wordpress',
-      isVisible: (role, permissions) =>
-        canViewWordPressUsers({ role, permissions }) || canManageTuitionStatus({ role, permissions }),
+      isVisible: (role, permissions) => canAccessWordPressStudents({ role, permissions }),
     },
     {
       name: 'Enrolamiento',
@@ -93,10 +94,7 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
       icon: UserPlus,
       roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'],
       section: 'wordpress',
-      isVisible: (role, permissions) =>
-        role === 'ADMIN' ||
-        permissions.includes('wordpress:manage_enrollments') ||
-        permissions.includes('wordpress:manage_users'),
+      isVisible: (role, permissions) => canAccessWordPressEnrollments({ role, permissions }),
     },
     {
       name: 'Pedidos WP',
@@ -104,10 +102,7 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
       icon: ShoppingCart,
       roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'],
       section: 'wordpress',
-      isVisible: (role, permissions) =>
-        role === 'ADMIN' ||
-        permissions.includes('wordpress:manage_orders') ||
-        permissions.includes('wordpress:manage_users'),
+      isVisible: (role, permissions) => canAccessWordPressOrders({ role, permissions }),
     },
   ]
 

@@ -56,7 +56,10 @@ export default async function ReportsPage() {
                 <MobileHeader title="Reportes" />
 
                 <main className="flex-1 overflow-y-auto">
-                    <ReportsClient canViewDepartments={user.permissions.includes('VIEW_DEPARTMENT_REPORTS')} />
+                    <ReportsClient
+                        canViewDepartments={user.permissions.includes('VIEW_DEPARTMENT_REPORTS')}
+                        currentUserId={user.id}
+                    />
                 </main>
             </div>
         </div>

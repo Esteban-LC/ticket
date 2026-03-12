@@ -6,6 +6,7 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
 import WordPressEnrollHub from '@/components/wordpress/WordPressEnrollHub'
 import { UserPlus } from 'lucide-react'
+import { canAccessWordPressEnrollments } from '@/lib/permissions'
 
 export const metadata = {
   title: 'Enrolamiento | Tickets LICEO MICHOACANO',
@@ -29,11 +30,7 @@ export default async function WordPressBulkEnrollPage() {
 
   if (!user) redirect('/login')
 
-  const hasPermission =
-    user.role === 'ADMIN' ||
-    user.permissions.includes('wordpress:access') ||
-    user.permissions.includes('wordpress:manage_users') ||
-    user.permissions.includes('wordpress:manage_enrollments')
+  const hasPermission = canAccessWordPressEnrollments(user)
 
   if (!hasPermission) redirect('/dashboard')
 

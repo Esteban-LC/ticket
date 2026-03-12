@@ -110,6 +110,14 @@ export function canAccessWorkspace(user: PermissionUser | null | undefined) {
   )
 }
 
+export function canAccessWorkspaceOrgUnits(user: PermissionUser | null | undefined) {
+  return canManageWorkspace(user)
+}
+
+export function canAccessWorkspaceHistory(user: PermissionUser | null | undefined) {
+  return canManageWorkspace(user)
+}
+
 export function canManageWorkspace(user: PermissionUser | null | undefined) {
   return hasPermission(user, 'workspace:manage_users') || user?.role === 'ADMIN'
 }
@@ -124,13 +132,31 @@ export function canViewWordPressUsers(user: PermissionUser | null | undefined) {
   )
 }
 
+export function canAccessWordPressStudents(user: PermissionUser | null | undefined) {
+  return canViewWordPressUsers(user)
+}
+
+export function canAccessWordPressEnrollments(user: PermissionUser | null | undefined) {
+  return (
+    user?.role === 'ADMIN' ||
+    hasPermission(user, 'wordpress:manage_enrollments') ||
+    hasPermission(user, 'wordpress:manage_users')
+  )
+}
+
+export function canAccessWordPressOrders(user: PermissionUser | null | undefined) {
+  return (
+    user?.role === 'ADMIN' ||
+    hasPermission(user, 'wordpress:manage_orders') ||
+    hasPermission(user, 'wordpress:manage_users')
+  )
+}
+
 export function canAccessWordPress(user: PermissionUser | null | undefined) {
   return (
-    hasPermission(user, 'wordpress:view_users') ||
-    hasPermission(user, 'wordpress:access') ||
-    hasPermission(user, 'wordpress:manage_users') ||
-    hasPermission(user, 'wordpress:manage_enrollments') ||
-    hasPermission(user, 'wordpress:manage_orders') ||
+    canAccessWordPressStudents(user) ||
+    canAccessWordPressEnrollments(user) ||
+    canAccessWordPressOrders(user) ||
     hasPermission(user, 'wordpress:manage_courses')
   )
 }

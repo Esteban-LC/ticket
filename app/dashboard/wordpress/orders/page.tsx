@@ -6,6 +6,7 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
 import WordPressOrdersClient from '@/components/wordpress/WordPressOrdersClient'
 import { ShoppingCart } from 'lucide-react'
+import { canAccessWordPressOrders } from '@/lib/permissions'
 
 export const metadata = {
   title: 'Pedidos | Tickets LICEO MICHOACANO',
@@ -29,11 +30,7 @@ export default async function WordPressOrdersPage() {
 
   if (!user) redirect('/login')
 
-  const hasPermission =
-    user.role === 'ADMIN' ||
-    user.permissions.includes('wordpress:access') ||
-    user.permissions.includes('wordpress:manage_orders') ||
-    user.permissions.includes('wordpress:manage_users')
+  const hasPermission = canAccessWordPressOrders(user)
 
   if (!hasPermission) redirect('/dashboard')
 
@@ -69,4 +66,3 @@ export default async function WordPressOrdersPage() {
     </div>
   )
 }
-

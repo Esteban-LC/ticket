@@ -22,7 +22,11 @@ import CreateUserModal from './CreateUserModal'
 import EditUserModal from './EditUserModal'
 import ConfirmModal from './ConfirmModal'
 import AdminHistory from './AdminHistory'
-import { canManageWorkspace } from '@/lib/permissions'
+import {
+  canAccessWorkspaceHistory,
+  canAccessWorkspaceOrgUnits,
+  canManageWorkspace,
+} from '@/lib/permissions'
 
 interface WorkspaceUser {
   id: string
@@ -58,6 +62,8 @@ interface WorkspaceClientProps {
 
 export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
   const canManage = canManageWorkspace(currentUser)
+  const canViewOrgUnits = canAccessWorkspaceOrgUnits(currentUser)
+  const canViewHistory = canAccessWorkspaceHistory(currentUser)
   const [users, setUsers] = useState<WorkspaceUser[]>([])
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,6 +110,11 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
   }, [searchQuery, selectedOrgUnit])
 
   const fetchOrgUnits = useCallback(async () => {
+    if (!canViewOrgUnits) {
+      setOrgUnits([])
+      return
+    }
+
     try {
       const res = await fetch('/api/workspace/orgunits')
       if (!res.ok) {
@@ -115,7 +126,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
     } catch (err: any) {
       console.error('Error fetching org units:', err)
     }
-  }, [])
+  }, [canViewOrgUnits])
 
   useEffect(() => {
     fetchUsers()
@@ -403,7 +414,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
           </div>
         </button>
 
-        {canManage ? (
+        {canViewOrgUnits ? (
           <button
             onClick={() => setActiveTab('orgunits')}
             className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 lg:p-6 transition-all hover:shadow-lg hover:scale-105 text-left"
@@ -446,7 +457,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
           <Users className="h-4 w-4" />
           Usuarios
         </button>
-        {canManage && (
+        {canViewOrgUnits && (
           <button
             onClick={() => setActiveTab('orgunits')}
             className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
@@ -460,7 +471,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
             <span className="sm:hidden">UOs</span>
           </button>
         )}
-        {canManage && (
+        {canViewHistory && (
           <button
             onClick={() => setActiveTab('history')}
             className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition whitespace-nowrap ${
@@ -490,7 +501,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
       {activeTab === 'users' && (
         <div>
           {/* Botón regresar a OUs */}
-          {canManage && selectedOrgUnit && (
+          {canViewOrgUnits && selectedOrgUnit && (
             <button
               onClick={() => setActiveTab('orgunits')}
               className="flex items-center gap-1.5 mb-3 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
@@ -522,7 +533,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
               </button>
             </form>
             <div className="flex flex-wrap gap-2">
-              {canManage && selectedOrgUnit && (
+              {canViewOrgUnits && selectedOrgUnit && (
                 <button
                   onClick={() => { setSelectedOrgUnit(null); }}
                   className="px-3 py-2 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition flex items-center gap-1 max-w-full"
@@ -582,14 +593,14 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
         </div>
       )}
 
-      {canManage && activeTab === 'orgunits' && (
+      {canViewOrgUnits && activeTab === 'orgunits' && (
         <OrgUnitTree
           orgUnits={orgUnits}
           onSelectOrgUnit={handleSelectOrgUnit}
         />
       )}
 
-      {canManage && activeTab === 'history' && <AdminHistory />}
+      {canViewHistory && activeTab === 'history' && <AdminHistory />}
 
       {activeTab === 'profile' && (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
@@ -620,16 +631,18 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
                   >
                     Volver a tabla
                   </button>
-                  <button
-                    onClick={() => handleSuspendUser(selectedUser)}
-                    className={`px-3 py-2 text-sm rounded-lg transition ${
-                      selectedUser.suspended
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-amber-600 hover:bg-amber-700 text-white'
-                    }`}
-                  >
-                    {selectedUser.suspended ? 'Reactivar' : 'Suspender'}
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() => handleSuspendUser(selectedUser)}
+                      className={`px-3 py-2 text-sm rounded-lg transition ${
+                        selectedUser.suspended
+                          ? 'bg-green-600 hover:bg-green-700 text-white'
+                          : 'bg-amber-600 hover:bg-amber-700 text-white'
+                      }`}
+                    >
+                      {selectedUser.suspended ? 'Reactivar' : 'Suspender'}
+                    </button>
+                  )}
                 </div>
               </div>
 

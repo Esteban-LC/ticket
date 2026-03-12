@@ -24,6 +24,7 @@ export async function GET() {
             id: true,
             name: true,
             email: true,
+            role: true,
             department: { select: { id: true, name: true } },
           },
         },
@@ -39,6 +40,7 @@ export async function GET() {
         userId: string
         userName: string | null
         userEmail: string
+        userRole: string
         reports: typeof allReports
       }>
     }> = {}
@@ -56,6 +58,7 @@ export async function GET() {
           userId,
           userName: report.user.name,
           userEmail: report.user.email,
+          userRole: report.user.role,
           reports: [],
         }
       }

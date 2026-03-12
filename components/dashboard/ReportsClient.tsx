@@ -29,6 +29,7 @@ interface Report {
     type: string
     status: string
     size: string
+    userId?: string
     url?: string | null
     description?: string | null
 }
@@ -37,6 +38,7 @@ interface DeptUserGroup {
     userId: string
     userName: string | null
     userEmail: string
+    userRole: string
     reports: Report[]
 }
 
@@ -46,7 +48,13 @@ interface DeptGroup {
     users: DeptUserGroup[]
 }
 
-export default function ReportsClient({ canViewDepartments = false }: { canViewDepartments?: boolean }) {
+export default function ReportsClient({
+    canViewDepartments = false,
+    currentUserId,
+}: {
+    canViewDepartments?: boolean
+    currentUserId: string
+}) {
     const [activeTab, setActiveTab] = useState<'mine' | 'departments'>('mine')
 
     // My reports state
@@ -65,6 +73,7 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
     const [isViewModalOpen, setIsViewModalOpen] = useState(false)
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [isContentEditMode, setIsContentEditMode] = useState(false)
     const [selectedReport, setSelectedReport] = useState<Report | null>(null)
     const [reportToDelete, setReportToDelete] = useState<Report | null>(null)
     const [reportToEdit, setReportToEdit] = useState<Report | null>(null)
@@ -160,6 +169,78 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
         }
     }
 
+    const getPreviewUrl = (url?: string | null) => {
+        if (!url) return ''
+
+        try {
+            const parsed = new URL(url)
+
+            if (!parsed.hostname.includes('docs.google.com')) {
+                return url
+            }
+
+            const pathname = parsed.pathname
+            const gid = parsed.searchParams.get('gid')
+
+            if (pathname.includes('/spreadsheets/d/')) {
+                const sheetBase = `https://${parsed.hostname}${pathname.replace(/\/edit.*/, '')}`
+                const params = new URLSearchParams()
+                params.set('rm', 'minimal')
+                params.set('single', 'true')
+                params.set('widget', 'false')
+                params.set('headers', 'false')
+                params.set('chrome', 'false')
+                params.set('pli', '1')
+                if (gid) params.set('gid', gid)
+                return `${sheetBase}/preview?${params.toString()}`
+            }
+
+            if (pathname.includes('/document/d/') || pathname.includes('/presentation/d/')) {
+                return `https://${parsed.hostname}${pathname.replace(/\/edit.*/, '/preview')}`
+            }
+        } catch {
+            return url
+        }
+
+        return url
+    }
+
+    const getEmbedScale = (report: Report, isEditMode: boolean) => {
+        if (report.type === 'LINK' && report.url?.includes('docs.google.com/spreadsheets/')) {
+            return isEditMode ? 0.99 : 0.99
+        }
+
+        return 1
+    }
+
+    const getEmbedExtraHeight = (report: Report, isEditMode: boolean) => {
+        if (report.type === 'LINK' && report.url?.includes('docs.google.com/spreadsheets/')) {
+            return 2400
+        }
+
+        return 0
+    }
+
+    const getEmbedTopOffset = (report: Report, _isEditMode: boolean) => {
+        if (report.type === 'LINK' && report.url?.includes('docs.google.com/spreadsheets/')) {
+            return 20
+        }
+
+        return 0
+    }
+
+    const canEditEmbeddedContent = (report: Report) => {
+        return report.type === 'LINK'
+            && !!report.url
+            && report.url.includes('docs.google.com')
+            && report.userId === currentUserId
+    }
+
+    const getEmbeddedContentUrl = (report: Report) => {
+        if (!report.url) return ''
+        return isContentEditMode ? report.url : getPreviewUrl(report.url)
+    }
+
     const handleCreateReport = async (e: React.FormEvent) => {
         e.preventDefault()
         setSaving(true)
@@ -198,6 +279,7 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
 
     const openViewModal = (report: Report) => {
         setSelectedReport(report)
+        setIsContentEditMode(false)
         setIsViewModalOpen(true)
     }
 
@@ -279,6 +361,36 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
 
     const groupedReports = groupReportsByMonth(reports)
 
+    const getRoleLabel = (role: string) => {
+        switch (role) {
+            case 'ADMIN':
+                return 'Administrador'
+            case 'COORDINATOR':
+                return 'Coordinador'
+            case 'EDITOR':
+                return 'Editor'
+            case 'VIEWER':
+                return 'Lector'
+            default:
+                return role
+        }
+    }
+
+    const getRoleBadgeClass = (role: string) => {
+        switch (role) {
+            case 'ADMIN':
+                return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+            case 'COORDINATOR':
+                return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+            case 'EDITOR':
+                return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+            case 'VIEWER':
+                return 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-300'
+            default:
+                return 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-300'
+        }
+    }
+
     const renderDepartmentView = () => {
         if (loadingDept) {
             return (
@@ -332,6 +444,9 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
                                                 <Users className="h-4 w-4 text-gray-400" />
                                                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                                     {u.userName || u.userEmail}
+                                                </span>
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${getRoleBadgeClass(u.userRole)}`}>
+                                                    {getRoleLabel(u.userRole)}
                                                 </span>
                                                 <span className="text-xs text-gray-400 dark:text-gray-500">
                                                     ({u.reports.length} {u.reports.length === 1 ? 'reporte' : 'reportes'})
@@ -495,10 +610,10 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
                                                         <td className="px-6 py-4">{report.size}</td>
                                                         <td className="px-6 py-4 text-right">
                                                             <div className="flex items-center justify-end gap-2">
-                                                                <button onClick={() => openViewModal(report)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" title="Ver">
+                                                                <button onClick={() => openViewModal(report)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" title="Ver reporte">
                                                                     <Eye className="h-4 w-4" />
                                                                 </button>
-                                                                <button onClick={() => handleEditClick(report)} className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors" title="Editar">
+                                                                <button onClick={() => handleEditClick(report)} className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors" title="Editar datos">
                                                                     <Pencil className="h-4 w-4" />
                                                                 </button>
                                                                 <button onClick={() => handleDeleteClick(report)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Eliminar">
@@ -592,8 +707,8 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
 
             {/* VIEW MODAL */}
             {isViewModalOpen && selectedReport && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-2 lg:p-4 bg-black/50 backdrop-blur-sm">
+                    <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-[94vw] max-w-[1560px] ${isContentEditMode ? 'h-[84vh]' : 'h-[70vh]'} flex flex-col overflow-hidden`}>
                         <div className="flex items-center justify-between p-4 border-b dark:border-slate-800 shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">{getTypeIcon(selectedReport.type)}</div>
@@ -602,27 +717,70 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
                                     <p className="text-xs text-gray-500 dark:text-gray-400">{selectedReport.date} · {selectedReport.size}</p>
                                 </div>
                             </div>
-                            <button onClick={() => setIsViewModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-                                <X className="h-5 w-5 text-gray-500" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {canEditEmbeddedContent(selectedReport) && (
+                                    <div className="flex gap-1 p-1 bg-gray-100 dark:bg-slate-800 rounded-lg">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsContentEditMode(false)}
+                                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${!isContentEditMode
+                                                ? 'bg-white dark:bg-slate-700 shadow text-blue-600 dark:text-blue-400'
+                                                : 'text-gray-500 dark:text-gray-400'
+                                                }`}
+                                        >
+                                            Solo vista
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsContentEditMode(true)}
+                                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${isContentEditMode
+                                                ? 'bg-white dark:bg-slate-700 shadow text-amber-600 dark:text-amber-400'
+                                                : 'text-gray-500 dark:text-gray-400'
+                                                }`}
+                                        >
+                                            Editar contenido
+                                        </button>
+                                    </div>
+                                )}
+                                <button onClick={() => setIsViewModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                                    <X className="h-5 w-5 text-gray-500" />
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex-1 bg-gray-100 dark:bg-slate-950 p-4 overflow-auto flex items-center justify-center">
+                        <div className={`flex-1 min-h-0 px-2 pb-2 pt-0 lg:px-3 lg:pb-3 lg:pt-0 overflow-hidden ${selectedReport.type === 'LINK' || selectedReport.type === 'IMG'
+                            ? 'bg-white dark:bg-slate-900'
+                            : 'bg-gray-100 dark:bg-slate-950'
+                            }`}>
                             {selectedReport.type === 'LINK' && selectedReport.url ? (
-                                <div className="w-full h-full flex flex-col">
+                                <div className="flex-1 min-h-0 w-full h-full flex flex-col overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-900 rounded-lg">
+                                    {(() => {
+                                        const embedScale = getEmbedScale(selectedReport, isContentEditMode)
+                                        const embedExtraHeight = getEmbedExtraHeight(selectedReport, isContentEditMode)
+                                        const embedTopOffset = getEmbedTopOffset(selectedReport, isContentEditMode)
+                                        return (
                                     <iframe
-                                        src={selectedReport.url.includes('docs.google.com') && selectedReport.url.includes('/edit') ? selectedReport.url.replace(/\/edit.*/, '/preview') : selectedReport.url}
-                                        className="w-full flex-1 rounded-lg border border-gray-200 dark:border-slate-800 bg-white"
+                                        src={getEmbeddedContentUrl(selectedReport)}
+                                        className="block rounded-lg border border-gray-200 dark:border-slate-800 bg-white"
+                                        style={{
+                                            width: `${100 / embedScale}%`,
+                                            height: `calc(${100 / embedScale}% + ${embedExtraHeight}px)`,
+                                            marginTop: `${embedTopOffset}px`,
+                                            transform: `scale(${embedScale})`,
+                                            transformOrigin: 'top left',
+                                        }}
                                         title="Report Preview"
                                         allowFullScreen
                                     />
-                                    <div className="mt-4 flex justify-center">
+                                        )
+                                    })()}
+                                    <div className="hidden">
                                         <a href={selectedReport.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1">
                                             Abrir en nueva pestaña <ExternalLink className="h-3 w-3" />
                                         </a>
                                     </div>
                                 </div>
                             ) : selectedReport.type === 'IMG' && selectedReport.url ? (
-                                <img src={selectedReport.url} alt={selectedReport.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
+                                <img src={selectedReport.url} alt={selectedReport.name} className="w-full h-full object-contain shadow-lg rounded-lg" />
                             ) : selectedReport.url ? (
                                 <div className="text-center space-y-4">
                                     <FileText className="h-16 w-16 text-gray-400 mx-auto" />
@@ -669,7 +827,7 @@ export default function ReportsClient({ canViewDepartments = false }: { canViewD
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
                         <div className="flex items-center justify-between p-4 border-b dark:border-slate-800">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Editar Reporte</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Editar datos del reporte</h3>
                             <button onClick={() => setIsEditModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
                                 <X className="h-5 w-5 text-gray-500" />
                             </button>

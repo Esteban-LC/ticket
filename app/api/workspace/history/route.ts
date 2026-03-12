@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canAccessWorkspace } from '@/lib/permissions'
+import { canAccessWorkspaceHistory } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       select: { role: true, permissions: true },
     })
 
-    if (!canAccessWorkspace(currentUser)) {
+    if (!canAccessWorkspaceHistory(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 

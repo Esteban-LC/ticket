@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { listOrgUnits, listUsersByOrgUnit } from '@/lib/google-admin'
 import { prisma } from '@/lib/prisma'
-import { canAccessWorkspace } from '@/lib/permissions'
+import { canAccessWorkspaceOrgUnits } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       select: { role: true, permissions: true },
     })
 
-    if (!canAccessWorkspace(currentUser)) {
+    if (!canAccessWorkspaceOrgUnits(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
