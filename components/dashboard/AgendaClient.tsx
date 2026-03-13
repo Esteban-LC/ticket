@@ -31,12 +31,21 @@ interface AgendaItem {
     user?: { id: string; name: string | null; email: string }
 }
 
+interface DepartmentUser {
+    id: string
+    name: string | null
+    email: string
+}
+
 interface AgendaClientProps {
     user: any
     openTicketsCount: number
+    departmentUsers: DepartmentUser[]
 }
 
-export default function AgendaClient({ user, openTicketsCount }: AgendaClientProps) {
+const OTROS = '__otros__'
+
+export default function AgendaClient({ user, openTicketsCount, departmentUsers }: AgendaClientProps) {
     const canEdit = user?.role !== 'VIEWER'
     const [items, setItems] = useState<AgendaItem[]>([])
     const [loading, setLoading] = useState(true)
@@ -49,7 +58,9 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
     const [newItem, setNewItem] = useState<Partial<AgendaItem>>({
         project: '', subproject: '', deliverable: '', link: '', responsible: '', date: '', status: 'Stand by', observations: ''
     })
+    const [newResponsableMode, setNewResponsableMode] = useState<'select' | 'otros'>('select')
     const [editItem, setEditItem] = useState<Partial<AgendaItem>>({})
+    const [editResponsableMode, setEditResponsableMode] = useState<'select' | 'otros'>('select')
 
     const fetchItems = async () => {
         try {
@@ -89,7 +100,13 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
         } catch (error) { console.error('Error:', error) } finally { setSaving(false) }
     }
 
-    const handleEditClick = (item: AgendaItem) => { setSelectedItem(item); setEditItem({ ...item }); setIsEditModalOpen(true) }
+    const handleEditClick = (item: AgendaItem) => {
+        setSelectedItem(item)
+        setEditItem({ ...item })
+        const isFromDept = item.responsible && departmentUsers.some(u => u.name === item.responsible)
+        setEditResponsableMode(isFromDept || !item.responsible ? 'select' : 'otros')
+        setIsEditModalOpen(true)
+    }
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -132,7 +149,7 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 <p className="text-gray-600 dark:text-gray-400 mt-1">Cronograma de entregables y responsables</p>
                             </div>
                             {canEdit && (
-                                <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors">
+                                <button onClick={() => { setNewResponsableMode('select'); setIsCreateModalOpen(true) }} className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors">
                                     <Plus className="h-4 w-4" /> Nuevo Evento
                                 </button>
                             )}
@@ -211,8 +228,32 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto General</label><input type="text" required className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.project || ''} onChange={(e) => setNewItem({ ...newItem, project: e.target.value })} /></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subproyecto</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.subproject || ''} onChange={(e) => setNewItem({ ...newItem, subproject: e.target.value })} /></div>
                                 <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Entregable</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.deliverable || ''} onChange={(e) => setNewItem({ ...newItem, deliverable: e.target.value })} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Responsable</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.responsible || ''} onChange={(e) => setNewItem({ ...newItem, responsible: e.target.value })} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="text" placeholder="Ej. lunes 22 de junio" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.date || ''} onChange={(e) => setNewItem({ ...newItem, date: e.target.value })} /></div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Responsable</label>
+                                    <select
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        value={newResponsableMode === 'otros' ? OTROS : (newItem.responsible || '')}
+                                        onChange={(e) => {
+                                            if (e.target.value === OTROS) {
+                                                setNewResponsableMode('otros')
+                                                setNewItem({ ...newItem, responsible: '' })
+                                            } else {
+                                                setNewResponsableMode('select')
+                                                setNewItem({ ...newItem, responsible: e.target.value })
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Sin responsable</option>
+                                        {departmentUsers.map(u => (
+                                            <option key={u.id} value={u.name || u.email}>{u.name || u.email}</option>
+                                        ))}
+                                        <option value={OTROS}>Otros...</option>
+                                    </select>
+                                    {newResponsableMode === 'otros' && (
+                                        <input type="text" placeholder="Nombre del responsable" className="w-full mt-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.responsible || ''} onChange={(e) => setNewItem({ ...newItem, responsible: e.target.value })} />
+                                    )}
+                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.date || ''} onChange={(e) => setNewItem({ ...newItem, date: e.target.value })} /></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label><select className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.status || ''} onChange={(e) => setNewItem({ ...newItem, status: e.target.value })}><option value="En Proceso">En Proceso</option><option value="Completado">Completado</option><option value="Stand by">Stand by</option><option value="Por definir">Por definir</option></select></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link / Documento</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.link || ''} onChange={(e) => setNewItem({ ...newItem, link: e.target.value })} /></div>
                                 <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observaciones</label><textarea className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" rows={2} value={newItem.observations || ''} onChange={(e) => setNewItem({ ...newItem, observations: e.target.value })} /></div>
@@ -236,8 +277,32 @@ export default function AgendaClient({ user, openTicketsCount }: AgendaClientPro
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto General</label><input type="text" required className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.project || ''} onChange={(e) => setEditItem({ ...editItem, project: e.target.value })} /></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subproyecto</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.subproject || ''} onChange={(e) => setEditItem({ ...editItem, subproject: e.target.value })} /></div>
                                 <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción del Entregable</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.deliverable || ''} onChange={(e) => setEditItem({ ...editItem, deliverable: e.target.value })} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Responsable</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.responsible || ''} onChange={(e) => setEditItem({ ...editItem, responsible: e.target.value })} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.date || ''} onChange={(e) => setEditItem({ ...editItem, date: e.target.value })} /></div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Responsable</label>
+                                    <select
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white"
+                                        value={editResponsableMode === 'otros' ? OTROS : (editItem.responsible || '')}
+                                        onChange={(e) => {
+                                            if (e.target.value === OTROS) {
+                                                setEditResponsableMode('otros')
+                                                setEditItem({ ...editItem, responsible: '' })
+                                            } else {
+                                                setEditResponsableMode('select')
+                                                setEditItem({ ...editItem, responsible: e.target.value })
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Sin responsable</option>
+                                        {departmentUsers.map(u => (
+                                            <option key={u.id} value={u.name || u.email}>{u.name || u.email}</option>
+                                        ))}
+                                        <option value={OTROS}>Otros...</option>
+                                    </select>
+                                    {editResponsableMode === 'otros' && (
+                                        <input type="text" placeholder="Nombre del responsable" className="w-full mt-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.responsible || ''} onChange={(e) => setEditItem({ ...editItem, responsible: e.target.value })} />
+                                    )}
+                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.date || ''} onChange={(e) => setEditItem({ ...editItem, date: e.target.value })} /></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label><select className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.status || ''} onChange={(e) => setEditItem({ ...editItem, status: e.target.value })}><option value="En Proceso">En Proceso</option><option value="Completado">Completado</option><option value="Stand by">Stand by</option><option value="Por definir">Por definir</option></select></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link / Documento</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.link || ''} onChange={(e) => setEditItem({ ...editItem, link: e.target.value })} /></div>
                                 <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observaciones</label><textarea className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" rows={2} value={editItem.observations || ''} onChange={(e) => setEditItem({ ...editItem, observations: e.target.value })} /></div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Filter } from 'lucide-react'
 import EventCard from './EventCard'
+import CreateEventModal from './CreateEventModal'
 
 interface Event {
     id: string
@@ -29,13 +30,18 @@ interface Event {
     }
 }
 
-export default function Timeline() {
+interface TimelineProps {
+    currentUserId: string
+    currentUserRole: string
+}
+
+export default function Timeline({ currentUserId, currentUserRole }: TimelineProps) {
+    const canManageEvent = (eventUserId: string) => eventUserId === currentUserId
     const [events, setEvents] = useState<Event[]>([])
     const [loading, setLoading] = useState(true)
-    const [filters, setFilters] = useState({
-        type: '',
-        status: ''
-    })
+    const [filters, setFilters] = useState({ type: '', status: '' })
+    const [editingEvent, setEditingEvent] = useState<Event | null>(null)
+    const [showEditModal, setShowEditModal] = useState(false)
 
     useEffect(() => {
         fetchEvents()
@@ -58,6 +64,11 @@ export default function Timeline() {
         } finally {
             setLoading(false)
         }
+    }
+
+    const handleEdit = (id: string) => {
+        const event = events.find(e => e.id === id)
+        if (event) { setEditingEvent(event); setShowEditModal(true) }
     }
 
     const handleDelete = async (id: string) => {
@@ -92,6 +103,7 @@ export default function Timeline() {
     }, {} as Record<string, Event[]>)
 
     return (
+        <>
         <div className="space-y-6">
             {/* Filtros */}
             <div className="bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
@@ -160,7 +172,8 @@ export default function Timeline() {
 
                                         <EventCard
                                             event={event}
-                                            onDelete={handleDelete}
+                                            onDelete={canManageEvent(event.user.id) ? handleDelete : undefined}
+                                            onEdit={canManageEvent(event.user.id) ? handleEdit : undefined}
                                         />
                                     </div>
                                 ))}
@@ -170,5 +183,14 @@ export default function Timeline() {
                 </div>
             )}
         </div>
+
+        {showEditModal && editingEvent && (
+            <CreateEventModal
+                eventToEdit={editingEvent}
+                onClose={() => { setShowEditModal(false); setEditingEvent(null) }}
+                onEventCreated={() => { fetchEvents(); setShowEditModal(false); setEditingEvent(null) }}
+            />
+        )}
+        </>
     )
 }

@@ -39,7 +39,13 @@ const MONTHS = [
 
 type ViewMode = 'CALENDAR' | 'KANBAN'
 
-export default function Calendar() {
+interface CalendarProps {
+    currentUserId: string
+    currentUserRole: string
+}
+
+export default function Calendar({ currentUserId, currentUserRole }: CalendarProps) {
+    const canManageEvent = (eventUserId: string) => eventUserId === currentUserId
     const [currentDate, setCurrentDate] = useState(new Date())
     const [events, setEvents] = useState<Event[]>([])
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -165,6 +171,16 @@ export default function Calendar() {
     const handleEditEventFromKanban = (event: Event) => {
         setEditingEvent(event)
         setShowCreateModal(true)
+    }
+
+    const handleDeleteEvent = async (id: string) => {
+        if (!confirm('¿Eliminar este evento?')) return
+        try {
+            const response = await fetch(`/api/events/${id}`, { method: 'DELETE' })
+            if (response.ok) fetchEvents()
+        } catch (error) {
+            console.error('Error al eliminar evento:', error)
+        }
     }
 
     const handleEventCreated = () => {
@@ -312,7 +328,8 @@ export default function Calendar() {
                                                 key={event.id}
                                                 event={event}
                                                 compact
-                                                onEdit={handleEditEvent}
+                                                onEdit={canManageEvent(event.user.id) ? handleEditEvent : undefined}
+                                                onDelete={canManageEvent(event.user.id) ? handleDeleteEvent : undefined}
                                             />
                                         ))}
                                         {dayEvents.length > 2 && (
@@ -332,6 +349,8 @@ export default function Calendar() {
                         events={events}
                         onEventUpdate={handleEventUpdate}
                         onEditEvent={handleEditEventFromKanban}
+                        currentUserId={currentUserId}
+                        currentUserRole={currentUserRole}
                     />
                 </div>
             )}

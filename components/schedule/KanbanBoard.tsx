@@ -52,6 +52,8 @@ interface KanbanBoardProps {
     events: Event[]
     onEventUpdate: (event: Event) => void
     onEditEvent: (event: Event) => void
+    currentUserId: string
+    currentUserRole: string
 }
 
 const COLUMNS = [
@@ -61,7 +63,7 @@ const COLUMNS = [
     { id: 'CANCELLED', title: 'Cancelado', color: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200' }
 ]
 
-function SortableItem({ event, onEdit }: { event: Event, onEdit: (id: string) => void }) {
+function SortableItem({ event, onEdit }: { event: Event, onEdit?: (id: string) => void }) {
     const {
         attributes,
         listeners,
@@ -84,7 +86,8 @@ function SortableItem({ event, onEdit }: { event: Event, onEdit: (id: string) =>
     )
 }
 
-export default function KanbanBoard({ events, onEventUpdate, onEditEvent }: KanbanBoardProps) {
+export default function KanbanBoard({ events, onEventUpdate, onEditEvent, currentUserId, currentUserRole }: KanbanBoardProps) {
+    const canManageEvent = (eventUserId: string) => eventUserId === currentUserId
     const [activeId, setActiveId] = useState<string | null>(null)
     const [activeEvent, setActiveEvent] = useState<Event | null>(null)
 
@@ -206,7 +209,7 @@ export default function KanbanBoard({ events, onEventUpdate, onEditEvent }: Kanb
                                             <SortableItem
                                                 key={event.id}
                                                 event={event}
-                                                onEdit={() => onEditEvent(event)}
+                                                onEdit={canManageEvent(event.user.id) ? () => onEditEvent(event) : undefined}
                                             />
                                         ))}
                                     </div>

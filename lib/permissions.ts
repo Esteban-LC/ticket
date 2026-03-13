@@ -83,13 +83,23 @@ export const USER_PERMISSION_GROUPS: Array<{
       },
     ],
   },
+  {
+    title: 'Tickets',
+    permissions: [
+      {
+        key: 'tickets:coordinator',
+        label: 'Coordinador de Sistemas',
+        description: 'Coordinador del área de sistemas. Permite asignar tickets a otros agentes y eliminarlos. Debe activarse manualmente incluso para administradores.',
+      },
+    ],
+  },
 ]
 
 export const ALL_USER_PERMISSIONS = USER_PERMISSION_GROUPS.flatMap((group) => group.permissions)
 export const USER_PERMISSION_LABELS = new Map(
   ALL_USER_PERMISSIONS.map((permission) => [permission.key, permission.label])
 )
-const ADMIN_HIDDEN_PERMISSION_KEYS = new Set(['VIEW_DEPARTMENT_REPORTS'])
+const ADMIN_HIDDEN_PERMISSION_KEYS = new Set(['VIEW_DEPARTMENT_REPORTS', 'tickets:coordinator'])
 
 type PermissionUser = {
   role?: string | null

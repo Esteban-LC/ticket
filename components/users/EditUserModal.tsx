@@ -41,6 +41,8 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
   })
 
   const isCurrentUser = session?.user?.id === user.id
+  const sessionPermissions = ((session?.user as any)?.permissions || []) as string[]
+  const canManageCoordinatorPerm = sessionPermissions.includes('tickets:coordinator')
 
   useEffect(() => {
     fetch('/api/departments')
@@ -219,13 +221,18 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                 </p>
               )}
               <div className="space-y-4">
-                {USER_PERMISSION_GROUPS.map((group) => (
+                {USER_PERMISSION_GROUPS.map((group) => {
+                  const visiblePerms = group.permissions.filter(
+                    (perm) => perm.key !== 'tickets:coordinator' || (canManageCoordinatorPerm && isCurrentUser)
+                  )
+                  if (visiblePerms.length === 0) return null
+                  return (
                   <div key={group.title}>
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
                       {group.title}
                     </p>
                     <div className="space-y-2">
-                      {group.permissions.map((perm) => (
+                      {visiblePerms.map((perm) => (
                         <label
                           key={perm.key}
                           className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
@@ -248,7 +255,8 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                       ))}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 

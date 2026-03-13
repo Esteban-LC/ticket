@@ -31,10 +31,26 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const priority = searchParams.get('priority')
+    const assignedToMe = searchParams.get('assignedToMe')
 
     const whereClause: any = {
       ...(status && { status: status as any }),
       ...(priority && { priority: priority as any }),
+    }
+
+    // Si se pide solo los asignados al usuario actual (para selectores como cronograma)
+    if (assignedToMe === 'true') {
+      whereClause.assigneeId = user.id
+      const tickets = await prisma.ticket.findMany({
+        where: whereClause,
+        include: {
+          customer: { select: { id: true, name: true, email: true, avatar: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+          _count: { select: { messages: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+      return NextResponse.json(tickets)
     }
 
     // Filtrar tickets según rol
@@ -48,8 +64,11 @@ export async function GET(request: Request) {
         whereClause.customer = { departmentId: fullUser.departmentId }
       }
     } else if (user.role === 'EDITOR' || user.role === 'VIEWER') {
-      // EDITOR y VIEWER solo ven tickets que crearon
-      whereClause.customerId = user.id
+      // EDITOR y VIEWER ven tickets que crearon O que tienen asignados
+      whereClause.OR = [
+        { customerId: user.id },
+        { assigneeId: user.id }
+      ]
     }
     // ADMIN ve todos los tickets
 

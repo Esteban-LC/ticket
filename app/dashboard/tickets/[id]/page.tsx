@@ -20,7 +20,7 @@ export default async function TicketDetailPage({
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true, permissions: true }
+    select: { id: true, name: true, email: true, role: true, permissions: true, department: { select: { isAdmin: true } } }
   })
 
   if (!user) {
@@ -102,15 +102,19 @@ export default async function TicketDetailPage({
     : { status: 'OPEN' as const }
   const openTicketsCount = await prisma.ticket.count({ where: countWhere })
 
-  const isRequester = user.id === ticket.customerId
-  const canDelete = user.role === 'ADMIN' || user.role === 'COORDINATOR'
+  const isAdminDept = user.department?.isAdmin === true
+  const isRequester = (user.role === 'EDITOR' || user.role === 'VIEWER') && user.id === ticket.customerId
+  // Coordinator = COORDINATOR role (any dept head) OR explicit permission (for ADMIN users who also coordinate)
+  const isCoordinator = user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')
+  // Only coordinators can delete tickets
+  const canDelete = user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-900">
       <Sidebar user={user} openTicketsCount={openTicketsCount} />
 
       <main className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <TicketHeader ticket={ticket} isRequester={isRequester} canDelete={canDelete} />
+        <TicketHeader ticket={ticket} isRequester={isRequester} canDelete={canDelete} isCoordinator={isCoordinator} isAdminDept={isAdminDept} currentUserId={user.id} />
 
         <TicketBody
           ticket={ticket}

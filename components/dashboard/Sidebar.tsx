@@ -60,7 +60,7 @@ export default function Sidebar({ user, openTicketsCount }: SidebarProps) {
     { name: 'Cronograma', href: '/dashboard/schedule', icon: Calendar, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal', isVisible: () => true },
     { name: 'Agenda', href: '/dashboard/agenda', icon: Calendar, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal', isVisible: () => true },
     { name: 'Resultados', href: '/dashboard/resultados', icon: Layout, roles: ['ADMIN', 'COORDINATOR', 'EDITOR', 'VIEWER'], section: 'personal', isVisible: () => true },
-    { name: 'Vista General', href: '/dashboard/vista-general', icon: Eye, roles: ['ADMIN'], section: 'admin', isVisible: (role) => role === 'ADMIN' },
+    { name: 'Vista General', href: '/dashboard/vista-general', icon: Eye, roles: ['ADMIN'], section: 'admin', isVisible: (role, permissions) => role === 'ADMIN' && permissions.includes('tickets:coordinator') },
     { name: 'Usuarios', href: '/dashboard/users', icon: Users, roles: ['ADMIN'], section: 'admin', isVisible: (role) => role === 'ADMIN' },
     {
       name: 'Workspace',

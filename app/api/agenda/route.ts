@@ -49,6 +49,14 @@ export async function GET(request: NextRequest) {
     }
 }
 
+function agendaStatusToEventStatus(status: string): string {
+    switch (status) {
+        case 'En Proceso': return 'IN_PROGRESS'
+        case 'Completado': return 'COMPLETED'
+        default: return 'PENDING'
+    }
+}
+
 // POST /api/agenda - Crear item de agenda
 export async function POST(request: NextRequest) {
     try {
@@ -78,6 +86,30 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'El proyecto es requerido' }, { status: 400 })
         }
 
+        // Crear evento en cronograma si hay fecha válida
+        let eventId: string | undefined
+        if (date) {
+            const parsedDate = new Date(date)
+            if (!isNaN(parsedDate.getTime())) {
+                const eventTitle = deliverable
+                    ? `${project} - ${deliverable}`
+                    : project
+                const event = await prisma.event.create({
+                    data: {
+                        title: eventTitle,
+                        description: [subproject, observations].filter(Boolean).join(' | ') || undefined,
+                        startDate: parsedDate,
+                        allDay: true,
+                        type: 'DEADLINE',
+                        status: agendaStatusToEventStatus(status || 'Stand by') as any,
+                        color: '#f59e0b',
+                        userId: user.id,
+                    }
+                })
+                eventId = event.id
+            }
+        }
+
         const item = await prisma.agendaItem.create({
             data: {
                 project,
@@ -89,6 +121,7 @@ export async function POST(request: NextRequest) {
                 status: status || 'Stand by',
                 observations: observations || null,
                 userId: user.id,
+                eventId: eventId || null,
             },
             include: {
                 user: {

@@ -83,7 +83,7 @@ export async function PATCH(
     // Obtener usuario con su rol
     const currentUser = await prisma.user.findFirst({
       where: { email: session.user.email || '', deletedAt: null },
-      select: { role: true }
+      select: { id: true, role: true, permissions: true }
     })
 
     // Solo ADMIN puede editar usuarios
@@ -103,7 +103,16 @@ export async function PATCH(
 
     // Actualizar permisos si se proporcionan
     if (permissions !== undefined) {
-      updateData.permissions = Array.isArray(permissions) ? permissions : []
+      let newPermissions = Array.isArray(permissions) ? permissions : []
+      // Solo quien ya tiene tickets:coordinator puede otorgarlo o revocarlo
+      const callerIsCoordinator = currentUser.permissions.includes('tickets:coordinator')
+      if (!callerIsCoordinator) {
+        const targetUser = await prisma.user.findFirst({ where: { id: params.id }, select: { permissions: true } })
+        const hadCoordinator = targetUser?.permissions.includes('tickets:coordinator') ?? false
+        newPermissions = newPermissions.filter((p: string) => p !== 'tickets:coordinator')
+        if (hadCoordinator) newPermissions.push('tickets:coordinator')
+      }
+      updateData.permissions = newPermissions
     }
 
     // Actualizar rol si se proporciona

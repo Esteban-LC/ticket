@@ -21,6 +21,9 @@ interface TicketHeaderProps {
   }
   isRequester?: boolean
   canDelete?: boolean
+  isCoordinator?: boolean
+  isAdminDept?: boolean
+  currentUserId?: string
 }
 
 const statusLabels = {
@@ -37,7 +40,7 @@ const priorityLabels = {
   URGENT: 'Urgente',
 }
 
-export default function TicketHeader({ ticket, isRequester, canDelete }: TicketHeaderProps) {
+export default function TicketHeader({ ticket, isRequester, canDelete, isCoordinator, isAdminDept, currentUserId }: TicketHeaderProps) {
   const router = useRouter()
   const [agents, setAgents] = useState<Array<{ id: string; name: string | null; email: string }>>([])
   const [updating, setUpdating] = useState(false)
@@ -59,7 +62,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete }: TicketH
   useEffect(() => {
     if (isRequester) return
     // Fetch agents for assignment
-    fetch('/api/users?role=COORDINATOR,ADMIN')
+    fetch('/api/agents')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -183,7 +186,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete }: TicketH
                 Cerrar ticket
               </button>
             ) : null
-          ) : (
+          ) : isCoordinator ? (
             <div className="flex items-center space-x-2">
               <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
               <select
@@ -200,7 +203,17 @@ export default function TicketHeader({ ticket, isRequester, canDelete }: TicketH
                 ))}
               </select>
             </div>
-          )}
+          ) : isAdminDept ? (
+            ticket.assignee?.id !== currentUserId ? (
+              <button
+                onClick={() => handleAssigneeChange(currentUserId || '')}
+                disabled={updating || !currentUserId}
+                className="px-4 py-2 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >
+                Tomar ticket
+              </button>
+            ) : null
+          ) : null}
 
           {canDelete && (
             <div className="relative" ref={menuRef}>

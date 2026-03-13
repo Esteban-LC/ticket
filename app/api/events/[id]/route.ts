@@ -92,8 +92,8 @@ export async function PATCH(
             return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 })
         }
 
-        // Verificar permisos (solo el creador o admin puede editar)
-        if (existingEvent.userId !== user.id && user.role !== 'ADMIN') {
+        // Solo el creador puede editar
+        if (existingEvent.userId !== user.id) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 
@@ -183,8 +183,8 @@ export async function DELETE(
             return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 })
         }
 
-        // Verificar permisos (solo el creador o admin puede eliminar)
-        if (existingEvent.userId !== user.id && user.role !== 'ADMIN') {
+        // Solo el creador puede eliminar
+        if (existingEvent.userId !== user.id) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 

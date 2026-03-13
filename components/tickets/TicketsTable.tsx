@@ -207,9 +207,6 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
                   Tipo
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Categoría
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Estado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -263,15 +260,6 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
                     {ticket.type ? (
                       <span className="text-sm text-gray-900 dark:text-gray-100">
                         {typeLabels[ticket.type] ?? ticket.type}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {ticket.category ? (
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
-                        {ticket.category.name}
                       </span>
                     ) : (
                       <span className="text-sm text-gray-400 dark:text-gray-500">-</span>

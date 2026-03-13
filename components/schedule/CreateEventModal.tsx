@@ -85,10 +85,10 @@ export default function CreateEventModal({
 
     const fetchTickets = async () => {
         try {
-            const response = await fetch('/api/tickets')
+            const response = await fetch('/api/tickets?assignedToMe=true')
             if (response.ok) {
                 const data = await response.json()
-                setTickets(data.tickets || [])
+                setTickets(Array.isArray(data) ? data : [])
             }
         } catch (error) {
             console.error('Error al cargar tickets:', error)

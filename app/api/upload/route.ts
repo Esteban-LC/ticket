@@ -4,8 +4,9 @@ import { authOptions } from '@/lib/auth'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
+import sharp from 'sharp'
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
 export async function POST(request: Request) {
@@ -31,13 +32,18 @@ export async function POST(request: Request) {
     }
 
     const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const ext = path.extname(file.name) || '.jpg'
+    const inputBuffer = Buffer.from(bytes)
+
+    const outputBuffer = await sharp(inputBuffer)
+      .webp({ quality: 82 })
+      .toBuffer()
+
+    const ext = '.webp'
     const filename = `${randomUUID()}${ext}`
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'messages')
 
     await mkdir(uploadDir, { recursive: true })
-    await writeFile(path.join(uploadDir, filename), buffer)
+    await writeFile(path.join(uploadDir, filename), outputBuffer)
 
     return NextResponse.json({ url: `/uploads/messages/${filename}` })
   } catch (error) {

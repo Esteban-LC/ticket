@@ -274,13 +274,16 @@ export default function CreateUserForm({ departments }: CreateUserFormProps) {
             </div>
 
             <div className="space-y-5">
-              {USER_PERMISSION_GROUPS.map((group) => (
+              {USER_PERMISSION_GROUPS.map((group) => {
+                const visiblePerms = group.permissions.filter((perm) => perm.key !== 'tickets:coordinator')
+                if (visiblePerms.length === 0) return null
+                return (
                 <div key={group.title}>
                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
                     {group.title}
                   </p>
                   <div className="space-y-3">
-                    {group.permissions.map((perm) => (
+                    {visiblePerms.map((perm) => (
                       <label
                         key={perm.key}
                         className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
@@ -303,7 +306,8 @@ export default function CreateUserForm({ departments }: CreateUserFormProps) {
                     ))}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
 
             {formData.permissions.length === 0 && (

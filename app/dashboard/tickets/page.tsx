@@ -63,6 +63,8 @@ export default async function TicketsPage({
   if (searchParams.assignee) {
     if (searchParams.assignee === 'unassigned') {
       whereClause.assigneeId = null
+    } else if (searchParams.assignee === 'mine') {
+      whereClause.assigneeId = user.id
     } else {
       whereClause.assigneeId = searchParams.assignee
     }
@@ -114,16 +116,9 @@ export default async function TicketsPage({
     }),
     prisma.ticket.count({ where: whereClause }),
     prisma.user.findMany({
-      where: {
-        role: {
-          in: ['ADMIN', 'COORDINATOR']
-        }
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      }
+      where: { deletedAt: null, department: { isAdmin: true } },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
     }),
     // Filtrar contador según el rol
     prisma.ticket.count({
@@ -157,14 +152,13 @@ export default async function TicketsPage({
               currentPriority={searchParams.priority}
               currentAssignee={searchParams.assignee}
               currentSearch={searchParams.search}
-              agents={agents}
             />
 
             <TicketsTable
               tickets={tickets}
               agents={agents}
               currentUserId={session.user.id}
-              canDelete={user.role === 'ADMIN' || user.role === 'COORDINATOR'}
+              canDelete={user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')}
             />
 
             <Pagination

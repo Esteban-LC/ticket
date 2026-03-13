@@ -18,7 +18,7 @@ interface MessageFormProps {
   ticketStatus?: string
 }
 
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 const EMOJI_GROUPS = [
   {
@@ -43,12 +43,11 @@ function revokeIfBlob(url: string) {
   if (url.startsWith('blob:')) URL.revokeObjectURL(url)
 }
 
-export default function MessageForm({ ticketId, currentUserId, replyTo, onClearReply, onMessageSent, ticketStatus }: MessageFormProps) {
+export default function MessageForm({ ticketId, replyTo, onClearReply, onMessageSent, ticketStatus }: MessageFormProps) {
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
-  const [pendingImages, setPendingImages] = useState<{ id: string; previewUrl: string; serverUrl: string | null }[]>([])
-  const isUploading = pendingImages.some(img => img.serverUrl === null)
+  const [pendingImages, setPendingImages] = useState<{ id: string; previewUrl: string; file: File }[]>([])
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
@@ -106,35 +105,17 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
     }, 0)
   }
 
-  const uploadFile = useCallback(async (file: File) => {
+  const addImageFile = useCallback((file: File) => {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return
     const id = Math.random().toString(36).slice(2)
     const previewUrl = URL.createObjectURL(file)
-    setPendingImages(prev => [...prev, { id, previewUrl, serverUrl: null }])
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Error al subir imagen')
-      }
-      const { url } = await res.json()
-      setPendingImages(prev => prev.map(img => img.id === id ? { ...img, serverUrl: url } : img))
-    } catch (error: any) {
-      setPendingImages(prev => {
-        const failed = prev.find(img => img.id === id)
-        if (failed) revokeIfBlob(failed.previewUrl)
-        return prev.filter(img => img.id !== id)
-      })
-      alert(error.message || 'Error al subir imagen')
-    }
+    setPendingImages(prev => [...prev, { id, previewUrl, file }])
   }, [])
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    uploadFile(file)
+    addImageFile(file)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -144,8 +125,8 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
     if (!imageItem) return
     e.preventDefault()
     const file = imageItem.getAsFile()
-    if (file) uploadFile(file)
-  }, [uploadFile])
+    if (file) addImageFile(file)
+  }, [addImageFile])
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -168,16 +149,29 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
     dragCounterRef.current = 0
     setIsDragging(false)
     const files = Array.from(e.dataTransfer.files).filter(f => ALLOWED_IMAGE_TYPES.includes(f.type))
-    files.forEach(file => uploadFile(file))
-  }, [uploadFile])
+    files.forEach(file => addImageFile(file))
+  }, [addImageFile])
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    const readyImages = pendingImages.filter(img => img.serverUrl !== null).map(img => img.serverUrl!)
-    if (!content.trim() && readyImages.length === 0) return
+    if (!content.trim() && pendingImages.length === 0) return
 
     setLoading(true)
     try {
+      // Upload all pending images now
+      const uploadedUrls: string[] = []
+      for (const img of pendingImages) {
+        const formData = new FormData()
+        formData.append('file', img.file)
+        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.error || 'Error al subir imagen')
+        }
+        const { url } = await res.json()
+        uploadedUrls.push(url)
+      }
+
       const hasAiMention = content.toLowerCase().includes('@ia')
 
       if (hasAiMention) {
@@ -188,7 +182,7 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
             ticketId,
             content,
             isInternal: true,
-            attachments: readyImages,
+            attachments: uploadedUrls,
             ...(replyTo && replyTo.id !== 'description' ? { replyToId: replyTo.id } : {}),
           }),
         })
@@ -213,7 +207,7 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
           body: JSON.stringify({
             ticketId,
             content,
-            attachments: readyImages,
+            attachments: uploadedUrls,
             ...(replyTo && replyTo.id !== 'description' ? { replyToId: replyTo.id } : {}),
           }),
         })
@@ -226,9 +220,9 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
       pendingImages.forEach(img => revokeIfBlob(img.previewUrl))
       setPendingImages([])
       onClearReply?.()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error)
-      alert('Error al enviar el mensaje')
+      alert(error.message || 'Error al enviar el mensaje')
     } finally {
       setLoading(false)
       setAiLoading(false)
@@ -298,15 +292,10 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
               <div key={img.id} className="relative group">
                 <div
                   className="h-20 w-20 rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 cursor-zoom-in"
-                  onClick={() => img.serverUrl !== null && setLightboxUrl(img.previewUrl)}
+                  onClick={() => setLightboxUrl(img.previewUrl)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.previewUrl} alt="imagen adjunta" className="h-full w-full object-cover hover:opacity-90 transition-opacity" />
-                  {img.serverUrl === null && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg cursor-default">
-                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  )}
                 </div>
                 <button
                   type="button"
@@ -347,7 +336,7 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
           {/* Send button */}
           <button
             type="submit"
-            disabled={loading || aiLoading || isUploading || (!content.trim() && pendingImages.length === 0)}
+            disabled={loading || aiLoading || (!content.trim() && pendingImages.length === 0)}
             className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {aiLoading ? (
@@ -381,14 +370,11 @@ export default function MessageForm({ ticketId, currentUserId, replyTo, onClearR
           >
             <LucideImage className="h-5 w-5" />
           </button>
-          {isUploading && (
-            <span className="text-xs text-gray-400 ml-1">Subiendo...</span>
-          )}
 
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
+            accept="image/jpeg,image/png,image/webp"
             onChange={handleImageSelect}
             className="hidden"
           />

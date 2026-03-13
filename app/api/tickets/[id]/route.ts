@@ -188,10 +188,10 @@ export async function DELETE(
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email || '' },
-      select: { id: true, role: true }
+      select: { id: true, role: true, permissions: true }
     })
 
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'COORDINATOR')) {
+    if (!user || (user.role !== 'COORDINATOR' && !user.permissions.includes('tickets:coordinator'))) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
