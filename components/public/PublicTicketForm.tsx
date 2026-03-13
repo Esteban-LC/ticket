@@ -16,7 +16,6 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
   const [formData, setFormData] = useState({
     subject: '',
     description: '',
-    priority: 'NORMAL',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,7 +41,6 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
         setFormData({
           subject: '',
           description: '',
-          priority: 'NORMAL',
         })
       } else {
         alert('Error al crear el ticket')
@@ -107,22 +105,6 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             placeholder="Proporciona todos los detalles posibles sobre tu problema..."
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Prioridad
-          </label>
-          <select
-            value={formData.priority}
-            onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="LOW">Baja</option>
-            <option value="NORMAL">Normal</option>
-            <option value="HIGH">Alta</option>
-            <option value="URGENT">Urgente</option>
-          </select>
         </div>
 
         <div className="flex justify-end pt-4 border-t">

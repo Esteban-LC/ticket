@@ -164,6 +164,7 @@ export default async function TicketsPage({
               tickets={tickets}
               agents={agents}
               currentUserId={session.user.id}
+              canDelete={user.role === 'ADMIN' || user.role === 'COORDINATOR'}
             />
 
             <Pagination

@@ -1,10 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { TicketStatus, TicketPriority, TicketType } from '@prisma/client'
-import { MessageSquare, User, Calendar } from 'lucide-react'
+import { MessageSquare, User, Calendar, Trash2, AlertTriangle } from 'lucide-react'
 
 interface Ticket {
   id: string
@@ -43,6 +44,7 @@ interface TicketsTableProps {
     email: string
   }>
   currentUserId: string
+  canDelete?: boolean
 }
 
 const statusColors = {
@@ -73,14 +75,37 @@ const priorityLabels = {
   URGENT: 'Urgente',
 }
 
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   INCIDENT: 'Incidente',
   CHANGE_REQUEST: 'Solicitud de cambio',
   PROJECT: 'Proyecto',
 }
 
-export default function TicketsTable({ tickets, agents, currentUserId }: TicketsTableProps) {
+export default function TicketsTable({ tickets, agents, currentUserId, canDelete }: TicketsTableProps) {
   const router = useRouter()
+  const [confirmTicket, setConfirmTicket] = useState<Ticket | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDeleteClick = (e: React.MouseEvent, ticket: Ticket) => {
+    e.stopPropagation()
+    setConfirmTicket(ticket)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!confirmTicket) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/tickets/${confirmTicket.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error deleting ticket:', error)
+    } finally {
+      setDeleting(false)
+      setConfirmTicket(null)
+    }
+  }
 
   if (tickets.length === 0) {
     return (
@@ -116,11 +141,18 @@ export default function TicketsTable({ tickets, agents, currentUserId }: Tickets
                   {ticket.subject}
                 </h3>
               </div>
+              {canDelete && (
+                <button
+                  onClick={(e) => handleDeleteClick(e, ticket)}
+                  className="ml-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
             {/* Info Grid */}
             <div className="space-y-2 text-xs">
-              {/* Cliente */}
               <div className="flex items-center space-x-2">
                 <User className="h-3.5 w-3.5 text-gray-400" />
                 <span className="text-gray-600 dark:text-gray-400">
@@ -128,7 +160,6 @@ export default function TicketsTable({ tickets, agents, currentUserId }: Tickets
                 </span>
               </div>
 
-              {/* Mensajes y Prioridad */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <MessageSquare className="h-3.5 w-3.5 text-gray-400" />
@@ -141,7 +172,6 @@ export default function TicketsTable({ tickets, agents, currentUserId }: Tickets
                 </span>
               </div>
 
-              {/* Fecha */}
               <div className="flex items-center space-x-2">
                 <Calendar className="h-3.5 w-3.5 text-gray-400" />
                 <span className="text-gray-600 dark:text-gray-400">
@@ -149,7 +179,6 @@ export default function TicketsTable({ tickets, agents, currentUserId }: Tickets
                 </span>
               </div>
 
-              {/* Asignado */}
               {ticket.assignee && (
                 <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
                   <span className="text-gray-500 dark:text-gray-500 text-xs">
@@ -192,6 +221,9 @@ export default function TicketsTable({ tickets, agents, currentUserId }: Tickets
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actualizado
                 </th>
+                {canDelete && (
+                  <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" />
+                )}
               </tr>
             </thead>
             <tbody className="bg-gray-50 dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
@@ -230,7 +262,7 @@ export default function TicketsTable({ tickets, agents, currentUserId }: Tickets
                   <td className="px-6 py-4 whitespace-nowrap">
                     {ticket.type ? (
                       <span className="text-sm text-gray-900 dark:text-gray-100">
-                        {typeLabels[ticket.type]}
+                        {typeLabels[ticket.type] ?? ticket.type}
                       </span>
                     ) : (
                       <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
@@ -261,12 +293,60 @@ export default function TicketsTable({ tickets, agents, currentUserId }: Tickets
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {format(new Date(ticket.updatedAt), 'PPp', { locale: es })}
                   </td>
+                  {canDelete && (
+                    <td className="px-4 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => handleDeleteClick(e, ticket)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Eliminar ticket"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal de confirmación */}
+      {confirmTicket && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Eliminar ticket
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+              ¿Estás seguro de que deseas eliminar el{' '}
+              <span className="font-medium">Ticket #{confirmTicket.number}</span>?{' '}
+              Esta acción no se puede deshacer y se eliminarán todos los mensajes asociados.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmTicket(null)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {deleting ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

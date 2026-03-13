@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { User, Mail, Phone, MapPin, Calendar, MessageSquare, ShoppingCart, FileText, Tag, Clock } from 'lucide-react'
+import { Mail, Phone, MapPin, Calendar, MessageSquare, ShoppingCart, FileText, Tag, Clock } from 'lucide-react'
 import { InteractionType, TicketType } from '@prisma/client'
 import { useRouter } from 'next/navigation'
 
 interface TicketSidebarProps {
+  isRequester?: boolean
   ticket: {
     id: string
     createdAt: Date
@@ -65,7 +66,7 @@ const interactionIcons = {
   RECEIPT: FileText,
 }
 
-export default function TicketSidebar({ ticket, interactions }: TicketSidebarProps) {
+export default function TicketSidebar({ ticket, interactions, isRequester }: TicketSidebarProps) {
   const router = useRouter()
   const [categories, setCategories] = useState<Category[]>([])
   const [isEditing, setIsEditing] = useState(false)
@@ -115,19 +116,19 @@ export default function TicketSidebar({ ticket, interactions }: TicketSidebarPro
   }
 
   return (
-    <div className="w-80 bg-gray-50 dark:bg-slate-800 border-l border-gray-200 dark:border-slate-700 overflow-y-auto">
+    <div className="w-full bg-gray-50 dark:bg-slate-800 overflow-y-auto">
       {/* Tipo, Categoría y Horas */}
       <div className="p-6 border-b border-gray-200 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase">Detalles</h3>
-          {!isEditing ? (
+          {!isRequester && !isEditing ? (
             <button
               onClick={() => setIsEditing(true)}
               className="text-xs text-primary-600 hover:text-primary-700"
             >
               Editar
             </button>
-          ) : (
+          ) : !isRequester && (
             <div className="flex gap-2">
               <button
                 onClick={() => {
@@ -230,19 +231,11 @@ export default function TicketSidebar({ ticket, interactions }: TicketSidebarPro
 
       {/* Customer Info */}
       <div className="p-6 border-b border-gray-200 dark:border-slate-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase mb-4">Cliente</h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase mb-3">Cliente</h3>
 
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="h-12 w-12 rounded-full bg-primary-100 flex items-center justify-center">
-            <User className="h-6 w-6 text-primary-600" />
-          </div>
-          <div>
-            <p className="font-medium text-gray-900 dark:text-gray-100">{ticket.customer.name || 'Sin nombre'}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Cliente</p>
-          </div>
-        </div>
+        <p className="font-medium text-gray-900 dark:text-gray-100 mb-3">{ticket.customer.name || 'Sin nombre'}</p>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="flex items-center space-x-2 text-sm">
             <Mail className="h-4 w-4 text-gray-400" />
             <span className="text-gray-700 dark:text-gray-300">{ticket.customer.email}</span>
@@ -273,18 +266,11 @@ export default function TicketSidebar({ ticket, interactions }: TicketSidebarPro
 
       {/* Assignee */}
       <div className="p-6 border-b border-gray-200 dark:border-slate-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase mb-4">Asignado a</h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase mb-3">Asignado a</h3>
         {ticket.assignee ? (
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-              <span className="text-green-600 font-medium">
-                {ticket.assignee.name?.[0] || ticket.assignee.email[0].toUpperCase()}
-              </span>
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-gray-100">{ticket.assignee.name}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{ticket.assignee.email}</p>
-            </div>
+          <div>
+            <p className="font-medium text-gray-900 dark:text-gray-100">{ticket.assignee.name}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{ticket.assignee.email}</p>
           </div>
         ) : (
           <p className="text-sm text-gray-500 dark:text-gray-400">Sin asignar</p>

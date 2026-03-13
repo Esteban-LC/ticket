@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendEmail, getTicketReplyEmailTemplate } from '@/lib/email'
+import { ticketEmitter } from '@/lib/sseEmitter'
 
 export async function POST(request: Request) {
   try {
@@ -15,9 +16,9 @@ export async function POST(request: Request) {
       )
     }
 
-    const { ticketId, content, isInternal, type } = await request.json()
+    const { ticketId, content, isInternal, type, replyToId, attachments } = await request.json()
 
-    if (!ticketId || !content) {
+    if (!ticketId || (!content?.trim() && !attachments?.length)) {
       return NextResponse.json(
         { error: 'Datos incompletos' },
         { status: 400 }
@@ -26,11 +27,13 @@ export async function POST(request: Request) {
 
     const message = await prisma.message.create({
       data: {
-        content,
+        content: content || '',
         isInternal: isInternal || false,
         type: type || 'COMMENT',
         ticketId,
         authorId: session.user.id,
+        attachments: attachments || [],
+        ...(replyToId ? { replyToId } : {}),
       },
       include: {
         author: {
@@ -40,6 +43,15 @@ export async function POST(request: Request) {
             email: true,
             avatar: true,
             role: true,
+          }
+        },
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            author: {
+              select: { id: true, name: true, email: true }
+            }
           }
         },
         ticket: {
@@ -63,6 +75,11 @@ export async function POST(request: Request) {
       data: { updatedAt: new Date() }
     })
 
+    // Emit SSE event to all connected clients for this ticket
+    // Strip the nested ticket from the emitted message to keep payload small
+    const { ticket: _ticket, ...messageForSSE } = message as any
+    ticketEmitter.emit(`ticket:${ticketId}`, { type: 'message', message: messageForSSE })
+
     // Enviar email al cliente si no es mensaje interno y el cliente tiene notificaciones activadas
     if (!isInternal && message.ticket.customer.emailNotifications && message.author.role !== 'VIEWER' && message.author.role !== 'EDITOR') {
       const emailTemplate = getTicketReplyEmailTemplate({
@@ -80,7 +97,7 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json(message, { status: 201 })
+    return NextResponse.json(messageForSSE, { status: 201 })
   } catch (error) {
     console.error('Error creating message:', error)
     return NextResponse.json(
@@ -121,6 +138,15 @@ export async function GET(request: Request) {
             email: true,
             avatar: true,
             role: true,
+          }
+        },
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            author: {
+              select: { id: true, name: true, email: true }
+            }
           }
         }
       },

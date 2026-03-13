@@ -4,9 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
 import TicketHeader from '@/components/tickets/TicketHeader'
-import MessageList from '@/components/tickets/MessageList'
-import MessageForm from '@/components/tickets/MessageForm'
-import TicketSidebar from '@/components/tickets/TicketSidebar'
+import TicketBody from '@/components/tickets/TicketBody'
 
 export default async function TicketDetailPage({
   params,
@@ -43,6 +41,7 @@ export default async function TicketDetailPage({
           createdAt: true,
         }
       },
+      // pinnedMessageId is a scalar field, included automatically
       category: {
         select: {
           id: true,
@@ -103,33 +102,22 @@ export default async function TicketDetailPage({
     : { status: 'OPEN' as const }
   const openTicketsCount = await prisma.ticket.count({ where: countWhere })
 
+  const isRequester = user.id === ticket.customerId
+  const canDelete = user.role === 'ADMIN' || user.role === 'COORDINATOR'
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-900">
       <Sidebar user={user} openTicketsCount={openTicketsCount} />
 
-      <main className="flex-1 flex overflow-hidden">
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <TicketHeader ticket={ticket} />
+      <main className="flex-1 flex flex-col overflow-hidden min-h-0">
+        <TicketHeader ticket={ticket} isRequester={isRequester} canDelete={canDelete} />
 
-          <div className="flex-1 overflow-y-auto p-6">
-            <MessageList
-              ticket={ticket}
-              messages={ticket.messages}
-              currentUserId={session.user.id}
-            />
-          </div>
-
-          <MessageForm
-            ticketId={ticket.id}
-            currentUserId={session.user.id}
-          />
-        </div>
-
-        {/* Right sidebar */}
-        <TicketSidebar
+        <TicketBody
           ticket={ticket}
+          messages={ticket.messages}
+          currentUserId={session.user.id}
           interactions={ticket.interactions}
+          isRequester={isRequester}
         />
       </main>
     </div>

@@ -96,7 +96,7 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     const body = await request.json()
-    const { subject, description, priority, type, categoryId, hours, tags, customerId, attachments } = body
+    const { subject, description, priority, type, typeOther, requestedBy, requesterArea, requesterResponsible, categoryId, hours, tags, customerId, attachments } = body
 
     console.log('Session:', session)
     console.log('CustomerId from body:', customerId)
@@ -153,9 +153,14 @@ export async function POST(request: Request) {
     }
 
     // Agregar campos opcionales solo si tienen valor
+    // Si es "OTHER", type queda null y se guarda la descripción en typeOther
     if (type && ['INCIDENT', 'CHANGE_REQUEST', 'PROJECT'].includes(type)) {
       ticketData.type = type
     }
+    if (typeOther) ticketData.typeOther = typeOther
+    if (requestedBy) ticketData.requestedBy = requestedBy
+    if (requesterArea) ticketData.requesterArea = requesterArea
+    if (requesterResponsible) ticketData.requesterResponsible = requesterResponsible
     
     if (categoryId) {
       ticketData.categoryId = categoryId

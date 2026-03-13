@@ -174,3 +174,32 @@ export async function PATCH(
     )
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email || '' },
+      select: { id: true, role: true }
+    })
+
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'COORDINATOR')) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    await prisma.ticket.delete({ where: { id: params.id } })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting ticket:', error)
+    return NextResponse.json({ error: 'Error al eliminar ticket' }, { status: 500 })
+  }
+}
