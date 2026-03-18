@@ -24,13 +24,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'emails debe ser un array no vacío' }, { status: 400 })
     }
 
-    const emails: string[] = [
-      ...new Set(
+    const emails = Array.from<string>(
+      new Set<string>(
         body.emails
           .map((e: unknown) => String(e).trim().toLowerCase())
           .filter((e: string) => e.includes('@'))
-      ),
-    ].slice(0, 200)
+      )
+    ).slice(0, 200)
 
     // Parallel lookup in batches of 10
     const BATCH = 10

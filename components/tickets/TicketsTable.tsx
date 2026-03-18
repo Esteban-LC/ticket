@@ -10,6 +10,7 @@ import { MessageSquare, User, Calendar, Trash2, AlertTriangle } from 'lucide-rea
 interface Ticket {
   id: string
   number: number
+  ticketCode: string | null
   subject: string
   status: TicketStatus
   priority: TicketPriority
@@ -85,6 +86,7 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
   const router = useRouter()
   const [confirmTicket, setConfirmTicket] = useState<Ticket | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const getTicketIdentifier = (ticket: Ticket) => ticket.ticketCode || `#${ticket.number}`
 
   const handleDeleteClick = (e: React.MouseEvent, ticket: Ticket) => {
     e.stopPropagation()
@@ -131,7 +133,7 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
               <div className="flex-1">
                 <div className="flex items-center space-x-2 mb-1">
                   <span className="text-primary-600 dark:text-primary-400 font-semibold text-sm">
-                    #{ticket.number}
+                    {getTicketIdentifier(ticket)}
                   </span>
                   <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusColors[ticket.status]}`}>
                     {statusLabels[ticket.status]}
@@ -232,7 +234,7 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-primary-600 dark:text-primary-400 font-medium">
-                      #{ticket.number}
+                      {getTicketIdentifier(ticket)}
                     </div>
                     <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">{ticket.subject}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -313,7 +315,7 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
               ¿Estás seguro de que deseas eliminar el{' '}
-              <span className="font-medium">Ticket #{confirmTicket.number}</span>?{' '}
+              <span className="font-medium">Ticket {getTicketIdentifier(confirmTicket)}</span>?{' '}
               Esta acción no se puede deshacer y se eliminarán todos los mensajes asociados.
             </p>
             <div className="flex gap-3 justify-end">

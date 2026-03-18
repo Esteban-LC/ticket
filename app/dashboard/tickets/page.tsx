@@ -71,9 +71,46 @@ export default async function TicketsPage({
   }
 
   if (searchParams.search) {
-    whereClause.subject = {
-      contains: searchParams.search,
-      mode: 'insensitive'
+    const query = searchParams.search.trim()
+    const exactNumber = Number.parseInt(query, 10)
+
+    const searchConditions = [
+      {
+        subject: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      {
+        ticketCode: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      {
+        requesterArea: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      {
+        requestedBy: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      ...(Number.isInteger(exactNumber) ? [{ number: exactNumber }] : []),
+    ]
+
+    if (Array.isArray(whereClause.OR)) {
+      whereClause.AND = [
+        ...(Array.isArray(whereClause.AND) ? whereClause.AND : []),
+        { OR: whereClause.OR },
+        { OR: searchConditions },
+      ]
+      delete whereClause.OR
+    } else {
+      whereClause.OR = searchConditions
     }
   }
 

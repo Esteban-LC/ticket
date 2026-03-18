@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 // GET /api/resultados - Listar resultados del usuario
 export async function GET(request: NextRequest) {
@@ -82,6 +86,8 @@ export async function POST(request: NextRequest) {
                 }
             }
         })
+
+        emitResourceEvent('results', { action: 'created', id: item.id })
 
         return NextResponse.json(item, { status: 201 })
     } catch (error) {

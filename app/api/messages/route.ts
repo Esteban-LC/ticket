@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     if (!isInternal && message.ticket.customer.emailNotifications && message.author.role !== 'VIEWER' && message.author.role !== 'EDITOR') {
       const emailTemplate = getTicketReplyEmailTemplate({
         customerName: message.ticket.customer.name || message.ticket.customer.email,
-        ticketNumber: message.ticket.number,
+        ticketIdentifier: message.ticket.ticketCode || `#${message.ticket.number}`,
         subject: message.ticket.subject,
         replyContent: content,
         agentName: message.author.name || message.author.email,

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { wooCommerceService } from '@/lib/wordpress/woocommerce'
 import { tutorLMSService } from '@/lib/wordpress/tutor-lms'
 import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
+import { emitResourceEvent } from '@/lib/resourceEvents'
 
 /**
  * GET /api/wordpress/orders/[id]
@@ -131,6 +132,25 @@ export async function PUT(
           enrollmentWarning,
         },
       })
+    }
+
+    if (status === 'completed' && existingOrder?.customer_id) {
+      const meta: Array<{ key: string; value: string }> = (existingOrder as any).meta_data || []
+      const courseIdsStr = meta.find((m) => m.key === '_liq_course_ids')?.value || ''
+      const courseIds = courseIdsStr
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((id) => id > 0)
+
+      if (courseIds.length > 0) {
+        emitResourceEvent('enrollments', {
+          action: 'enrolled',
+          mode: 'order_completion',
+          userId: existingOrder.customer_id,
+          courseIds,
+          orderId,
+        })
+      }
     }
 
     return NextResponse.json({

@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+function getTodayDate() {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+function normalizeAgendaDate(value: unknown) {
+    const normalized = typeof value === 'string' ? value.trim() : ''
+    return normalized || getTodayDate()
+}
 
 // GET /api/agenda - Listar items de agenda del usuario
 export async function GET(request: NextRequest) {
@@ -13,7 +30,7 @@ export async function GET(request: NextRequest) {
 
         const user = await prisma.user.findUnique({
             where: { email: session.user.email },
-            select: { id: true, role: true, departmentId: true }
+            select: { id: true, role: true, departmentId: true, department: { select: { isAdmin: true } } }
         })
 
         if (!user) {
@@ -24,6 +41,9 @@ export async function GET(request: NextRequest) {
         const where: any = {}
         if (user.role === 'ADMIN') {
             // ADMIN ve todos
+        } else if (user.department?.isAdmin && user.departmentId) {
+            // En Sistemas la agenda es compartida por departamento
+            where.user = { departmentId: user.departmentId }
         } else if (user.role === 'COORDINATOR' && user.departmentId) {
             // COORDINATOR ve items de su departamento
             where.user = { departmentId: user.departmentId }
@@ -80,7 +100,8 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { project, subproject, deliverable, link, responsible, date, status, observations } = body
+        const { project, subproject, deliverable, link, responsible, status, observations } = body
+        const date = normalizeAgendaDate(body?.date)
 
         if (!project) {
             return NextResponse.json({ error: 'El proyecto es requerido' }, { status: 400 })
@@ -129,6 +150,9 @@ export async function POST(request: NextRequest) {
                 }
             }
         })
+
+        emitResourceEvent('agenda', { action: 'created', id: item.id })
+        emitResourceEvent('events', { action: 'sync-from-agenda', id: item.eventId || item.id })
 
         return NextResponse.json(item, { status: 201 })
     } catch (error) {

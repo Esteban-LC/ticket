@@ -3,6 +3,8 @@
 import { KeyboardEvent, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, GraduationCap, RefreshCw, Search, User, Users } from 'lucide-react'
 import type { RecentEnrollment } from './WordPressEnrollHub'
+import { useResourceStream } from '@/lib/useResourceStream'
+import { emitClientResourceEvent } from '@/lib/clientResourceEvents'
 
 interface WordPressUser {
   id: number
@@ -74,6 +76,7 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
   const [result, setResult] = useState<BatchEnrollResponse | null>(null)
   const [searchStarted, setSearchStarted] = useState(false)
   const [enrolledUserIds, setEnrolledUserIds] = useState<Set<number>>(new Set())
+  const [selectedUserCourseIds, setSelectedUserCourseIds] = useState<Set<number>>(new Set())
 
   const stripHtml = (value: string) => value.replace(/<[^>]+>/g, '').trim()
 
@@ -142,14 +145,23 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
       setError(null)
       setSelectedCourseIds([])
 
-      const res = await fetch('/api/wordpress/courses?per_page=100&status=publish', { cache: 'no-store' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al cargar cursos')
+      const [coursesRes, enrolledRes] = await Promise.all([
+        fetch('/api/wordpress/courses?per_page=100&status=publish', { cache: 'no-store' }),
+        fetch(`/api/wordpress/users/${selectedUserId}/courses`, { cache: 'no-store' }),
+      ])
+      const coursesData = await coursesRes.json()
+      const enrolledData = await enrolledRes.json()
+      if (!coursesRes.ok) throw new Error(coursesData.error || 'Error al cargar cursos')
+      if (!enrolledRes.ok) throw new Error(enrolledData.error || 'Error al validar cursos enrolados')
 
-      setCourses(data.courses || [])
+      setCourses(coursesData.courses || [])
+      setSelectedUserCourseIds(
+        new Set((enrolledData.courses || []).map((course: any) => Number(course.id)).filter(Boolean))
+      )
     } catch (e: any) {
       setError(e.message || 'Error al cargar cursos')
       setCourses([])
+      setSelectedUserCourseIds(new Set())
     } finally {
       setLoadingCourses(false)
     }
@@ -159,6 +171,7 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
     if (!selectedUserId) {
       setCourses([])
       setSelectedCourseIds([])
+      setSelectedUserCourseIds(new Set())
       return
     }
 
@@ -166,13 +179,17 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
   }, [selectedUserId])
 
   const toggleCourse = (courseId: number) => {
+    if (selectedUserCourseIds.has(courseId)) {
+      return
+    }
+
     setSelectedCourseIds((prev) =>
       prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
     )
   }
 
   const toggleSelectAllCourses = () => {
-    const visibleCourseIds = courses.map((c) => c.id)
+    const visibleCourseIds = courses.map((c) => c.id).filter((id) => !selectedUserCourseIds.has(id))
     const allSelected = visibleCourseIds.every((id) => selectedCourseIds.includes(id))
 
     if (allSelected) {
@@ -223,7 +240,16 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
       setSelectedCourseIds([])
 
       if (selectedUser && data.success) {
-        setEnrolledUserIds((prev) => new Set([...prev, selectedUser.id]))
+        setEnrolledUserIds((prev) => new Set(Array.from(prev).concat(selectedUser.id)))
+        const newlyEnrolledIds = (data.results || [])
+          .filter((item: BatchResultItem) => item.success)
+          .map((item: BatchResultItem) => item.course_id)
+        setSelectedUserCourseIds((prev) => new Set(Array.from(prev).concat(newlyEnrolledIds)))
+        emitClientResourceEvent('enrollments', {
+          action: 'enrolled',
+          userId: selectedUser.id,
+          courseIds: newlyEnrolledIds,
+        })
         onEnrollSuccess?.({
           userId: selectedUser.id,
           userName: selectedUser.name || `Usuario #${selectedUser.id}`,
@@ -242,6 +268,16 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
       setSubmitting(false)
     }
   }
+
+  useResourceStream('enrollments', () => {
+    if (selectedUserId) {
+      loadCoursesForSelectedUser()
+    }
+
+    if (hasSearched && searchTerm.trim().length >= 2) {
+      loadUsers(page, searchTerm)
+    }
+  })
 
   if (!canEnroll) {
     return (
@@ -425,7 +461,7 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
             <button
               type="button"
               onClick={toggleSelectAllCourses}
-              disabled={loadingCourses || !selectedUser || courses.length === 0}
+              disabled={loadingCourses || !selectedUser || courses.length === 0 || courses.every((course) => selectedUserCourseIds.has(course.id))}
               className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700"
             >
               Seleccionar todos
@@ -454,18 +490,25 @@ export default function WordPressUserCourseEnroll({ userRole, userPermissions, o
             <ul className="max-h-[470px] divide-y divide-gray-100 overflow-y-auto dark:divide-slate-700">
               {courses.map((course) => (
                 <li key={course.id} className="px-4 py-2.5">
-                  <label className="flex cursor-pointer items-center gap-3">
+                  <label className={`flex items-center gap-3 ${selectedUserCourseIds.has(course.id) ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={selectedCourseIds.includes(course.id)}
                       onChange={() => toggleCourse(course.id)}
+                      disabled={selectedUserCourseIds.has(course.id)}
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
                         {stripHtml(course.title?.rendered || `Curso #${course.id}`)}
                       </p>
                     </div>
+                    {selectedUserCourseIds.has(course.id) && (
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                        <GraduationCap className="h-3 w-3" />
+                        Ya enrolado
+                      </span>
+                    )}
                   </label>
                 </li>
               ))}

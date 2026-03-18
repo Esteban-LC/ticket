@@ -21,6 +21,7 @@ import {
     ChevronRight,
     Users,
 } from 'lucide-react'
+import { useResourceStream } from '@/lib/useResourceStream'
 
 interface Report {
     id: string
@@ -124,13 +125,19 @@ export default function ReportsClient({
         }
     }
 
-    useEffect(() => { fetchReports() }, [])
-
     useEffect(() => {
         if (activeTab === 'departments' && !deptLoaded) {
             fetchDeptReports()
         }
     }, [activeTab])
+
+    useEffect(() => { fetchReports() }, [])
+    useResourceStream('reports', () => {
+        fetchReports()
+        if (canViewDepartments && deptLoaded) {
+            fetchDeptReports()
+        }
+    })
 
     const toggleDept = (deptId: string) => {
         setExpandedDepts(prev => {

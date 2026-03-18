@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ClipboardList, GraduationCap, Info, Loader2, RefreshCw, Search, Users, X } from 'lucide-react'
 import type { RecentEnrollment, SharedCourse } from './WordPressEnrollHub'
+import { useResourceStream } from '@/lib/useResourceStream'
+import { emitClientResourceEvent } from '@/lib/clientResourceEvents'
 
 interface WordPressUser {
   id: number
@@ -62,6 +64,7 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<BulkEnrollResponse | null>(null)
   const [enrolledUserIds, setEnrolledUserIds] = useState<Set<number>>(new Set())
+  const [courseStudentIds, setCourseStudentIds] = useState<Set<number>>(new Set())
 
   // Paste-by-email modal
   const [pasteOpen, setPasteOpen] = useState(false)
@@ -121,12 +124,54 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
     loadUsers()
   }, [page, searchTerm])
 
+  useEffect(() => {
+    const loadCourseStudents = async () => {
+      if (!selectedCourseId) {
+        setCourseStudentIds(new Set())
+        return
+      }
+
+      const enrolledIds = new Set<number>()
+      let currentPage = 1
+      let hasMorePages = true
+
+      while (hasMorePages && currentPage <= 20) {
+        const response = await fetch(
+          `/api/wordpress/courses/${selectedCourseId}/students?per_page=100&page=${currentPage}`,
+          { cache: 'no-store' }
+        )
+        if (!response.ok) {
+          break
+        }
+
+        const data = await response.json()
+        ;(data.students || []).forEach((student: any) => {
+          const id = Number(student.id || student.ID)
+          if (id) {
+            enrolledIds.add(id)
+          }
+        })
+        hasMorePages = Boolean(data.has_more)
+        currentPage += 1
+      }
+
+      setCourseStudentIds(enrolledIds)
+      setSelectedUserIds((prev) => prev.filter((id) => !enrolledIds.has(id)))
+    }
+
+    loadCourseStudents()
+  }, [selectedCourseId])
+
   const selectableIds = useMemo(
-    () => users.filter((u) => !u.isSuspended).map((u) => u.id),
-    [users]
+    () => users.filter((u) => !u.isSuspended && !courseStudentIds.has(u.id)).map((u) => u.id),
+    [courseStudentIds, users]
   )
 
   const toggleUser = (userId: number) => {
+    if (courseStudentIds.has(userId)) {
+      return
+    }
+
     setSelectedUserIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     )
@@ -144,12 +189,12 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
 
   // ── Paste / lookup ──────────────────────────────────────────────
   const parseEmails = (text: string): string[] =>
-    [...new Set(
+    Array.from(new Set(
       text
         .split(/[\n,;]+/)
         .map((e) => e.trim().toLowerCase())
         .filter((e) => e.includes('@') && e.includes('.'))
-    )]
+    ))
 
   const handleLookup = async () => {
     const emails = parseEmails(pasteText)
@@ -244,7 +289,13 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
         .filter(Boolean)
 
       if (successIds.length > 0) {
-        setEnrolledUserIds((prev) => new Set([...prev, ...successIds]))
+        setEnrolledUserIds((prev) => new Set(Array.from(prev).concat(successIds)))
+        setCourseStudentIds((prev) => new Set(Array.from(prev).concat(successIds)))
+        emitClientResourceEvent('enrollments', {
+          action: 'enrolled',
+          userIds: successIds,
+          courseIds: [Number(selectedCourseId)],
+        })
         successIds.forEach((uid) => {
           const uFromList = users.find((u) => u.id === uid)
           const uFromPaste = pastedUserMap.get(uid)
@@ -285,6 +336,59 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
       failed: result.results.filter((r) => !r.success),
     }
   }, [result])
+
+  useResourceStream('enrollments', () => {
+    const params = new URLSearchParams({ page: String(page), per_page: String(PER_PAGE) })
+    if (searchTerm) {
+      params.set('search', searchTerm)
+    }
+
+    fetch(`/api/wordpress/enroll/users?${params.toString()}`, { cache: 'no-store' })
+      .then(async (res) => {
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data.error || 'Error al cargar usuarios')
+        }
+        setUsers(data.users || [])
+        setHasMore(Boolean(data.pagination?.has_more))
+      })
+      .catch(() => {})
+
+    if (!selectedCourseId) {
+      return
+    }
+
+    const enrolledIds = new Set<number>()
+    let currentPage = 1
+
+    const refreshCourseStudents = async () => {
+      let hasMorePages = true
+      while (hasMorePages && currentPage <= 20) {
+        const response = await fetch(
+          `/api/wordpress/courses/${selectedCourseId}/students?per_page=100&page=${currentPage}`,
+          { cache: 'no-store' }
+        )
+        if (!response.ok) {
+          break
+        }
+
+        const data = await response.json()
+        ;(data.students || []).forEach((student: any) => {
+          const id = Number(student.id || student.ID)
+          if (id) {
+            enrolledIds.add(id)
+          }
+        })
+        hasMorePages = Boolean(data.has_more)
+        currentPage += 1
+      }
+
+      setCourseStudentIds(enrolledIds)
+      setSelectedUserIds((prev) => prev.filter((id) => !enrolledIds.has(id)))
+    }
+
+    refreshCourseStudents().catch(() => {})
+  })
 
   const getUserName = (userId: number) => {
     const u = users.find((u) => u.id === userId)
@@ -455,17 +559,23 @@ export default function WordPressBulkEnrollV2({ userRole, userPermissions, cours
           <ul className="max-h-[500px] divide-y divide-gray-100 overflow-y-auto dark:divide-slate-700">
             {users.map((user) => (
               <li key={user.id} className="px-4 py-2.5">
-                <label className={`flex items-center gap-3 ${user.isSuspended ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                <label className={`flex items-center gap-3 ${user.isSuspended || courseStudentIds.has(user.id) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                   <input
                     type="checkbox"
                     checked={selectedUserIds.includes(user.id)}
                     onChange={() => toggleUser(user.id)}
-                    disabled={!!user.isSuspended}
+                    disabled={!!user.isSuspended || courseStudentIds.has(user.id)}
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{user.name || `Usuario #${user.id}`}</p>
+                      {courseStudentIds.has(user.id) && (
+                        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                          <GraduationCap className="h-3 w-3" />
+                          Ya enrolado
+                        </span>
+                      )}
                       {enrolledUserIds.has(user.id) && (
                         <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
                           <GraduationCap className="h-3 w-3" />

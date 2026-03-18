@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 const eventUpdateSchema = z.object({
     title: z.string().min(1).optional(),
@@ -138,6 +142,8 @@ export async function PATCH(
             }
         })
 
+        emitResourceEvent('events', { action: 'updated', id: event.id })
+
         return NextResponse.json(event)
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -191,6 +197,8 @@ export async function DELETE(
         await prisma.event.delete({
             where: { id: params.id }
         })
+
+        emitResourceEvent('events', { action: 'deleted', id: params.id })
 
         return NextResponse.json({ message: 'Evento eliminado correctamente' })
     } catch (error) {

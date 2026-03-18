@@ -12,6 +12,7 @@ import {
     Filter,
     Loader2
 } from 'lucide-react'
+import { useResourceStream } from '@/lib/useResourceStream'
 
 interface ResultItem {
     id: string
@@ -76,10 +77,6 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
         }
     }
 
-    useEffect(() => {
-        fetchResults()
-    }, [])
-
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'Entregado':
@@ -94,6 +91,11 @@ export default function ResultsClient({ user, openTicketsCount }: ResultsClientP
                 return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
         }
     }
+
+    useEffect(() => {
+        fetchResults()
+    }, [])
+    useResourceStream('results', fetchResults)
 
     const resetForm = () => {
         setFormData({

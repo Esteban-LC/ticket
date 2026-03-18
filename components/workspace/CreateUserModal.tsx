@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X, UserPlus, Eye, EyeOff, Loader2, CheckCircle2, Copy, Check, FolderTree, Mail, KeyRound, User } from 'lucide-react'
 import OrgUnitCombobox from './OrgUnitCombobox'
+import UnsavedChangesDialog from '@/components/ui/UnsavedChangesDialog'
+import { useUnsavedChangesWarning } from '@/lib/useUnsavedChangesWarning'
+import { emitClientResourceEvent } from '@/lib/clientResourceEvents'
 
 interface OrgUnit {
   orgUnitId: string
@@ -48,6 +51,21 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
   const [error, setError] = useState<string | null>(null)
   const [createdUser, setCreatedUser] = useState<CreatedUserInfo | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+
+  const hasUnsavedChanges = useMemo(() => (
+    !createdUser && (
+      form.givenName.trim() !== '' ||
+      form.familyName.trim() !== '' ||
+      form.primaryEmail.trim() !== '' ||
+      form.password.trim() !== '' ||
+      form.wordPressUsername.trim() !== '' ||
+      form.orgUnitPath !== (defaultOrgUnitPath || '/') ||
+      form.createWordPressUser !== true
+    )
+  ), [createdUser, defaultOrgUnitPath, form])
+
+  useUnsavedChangesWarning(hasUnsavedChanges)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,6 +85,8 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
       }
 
       const data = await res.json()
+
+      emitClientResourceEvent('workspace', { action: 'created', targetEmail: form.primaryEmail })
 
       // Guardar info del usuario creado para mostrar resumen
       setCreatedUser({
@@ -105,6 +125,20 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
     if (createdUser) {
       onCreated()
     }
+    onClose()
+  }
+
+  const handleRequestClose = () => {
+    if (loading || createdUser) {
+      handleClose()
+      return
+    }
+
+    if (hasUnsavedChanges) {
+      setShowUnsavedDialog(true)
+      return
+    }
+
     onClose()
   }
 
@@ -266,7 +300,7 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition"
           >
             <X className="h-5 w-5 text-gray-500" />
@@ -390,7 +424,7 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
           <div className="flex gap-3 pt-4 border-t dark:border-slate-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition font-medium"
             >
               Cancelar
@@ -415,6 +449,14 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
           </div>
         </form>
       </div>
+      <UnsavedChangesDialog
+        isOpen={showUnsavedDialog}
+        onKeepEditing={() => setShowUnsavedDialog(false)}
+        onDiscard={() => {
+          setShowUnsavedDialog(false)
+          onClose()
+        }}
+      />
     </div>
   )
 }

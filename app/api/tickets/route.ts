@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendEmail, getTicketCreatedEmailTemplate } from '@/lib/email'
+import { generateTicketCode } from '@/lib/ticket-code'
 
 export async function GET(request: Request) {
   try {
@@ -149,7 +150,15 @@ export async function POST(request: Request) {
 
     // Verificar que el usuario existe
     const userExists = await prisma.user.findUnique({
-      where: { id: finalCustomerId }
+      where: { id: finalCustomerId },
+      select: {
+        id: true,
+        department: {
+          select: {
+            name: true,
+          }
+        }
+      }
     })
 
     if (!userExists) {
@@ -191,26 +200,35 @@ export async function POST(request: Request) {
 
     console.log('Ticket data:', ticketData)
 
-    const ticket = await prisma.ticket.create({
-      data: ticketData,
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-            emailNotifications: true,
+    const ticket = await prisma.$transaction(async (tx) => {
+      const ticketCode = await generateTicketCode(tx, {
+        area: requesterArea || userExists.department?.name || null,
+      })
+
+      return tx.ticket.create({
+        data: {
+          ...ticketData,
+          ticketCode,
+        },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatar: true,
+              emailNotifications: true,
+            }
           }
         }
-      }
+      })
     })
 
     // Enviar email al cliente si tiene notificaciones activadas
     if (ticket.customer.emailNotifications) {
       const emailTemplate = getTicketCreatedEmailTemplate({
         customerName: ticket.customer.name || ticket.customer.email,
-        ticketNumber: ticket.number,
+        ticketIdentifier: ticket.ticketCode || `#${ticket.number}`,
         subject: ticket.subject,
         description: ticket.description || '',
       })

@@ -32,7 +32,11 @@ export async function GET(
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const userPermissions = (session.user as any).permissions || []
-    if (!userPermissions.includes('wordpress:manage_users') && session.user.role !== 'ADMIN') {
+    if (
+      !userPermissions.includes('wordpress:manage_users') &&
+      !userPermissions.includes('wordpress:manage_enrollments') &&
+      session.user.role !== 'ADMIN'
+    ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 

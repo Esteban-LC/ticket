@@ -6,6 +6,10 @@ import { logAdminAction } from '@/lib/admin-log'
 import { wpUserService } from '@/lib/wordpress/users'
 import { prisma } from '@/lib/prisma'
 import { canAccessWorkspace, canManageWorkspace } from '@/lib/permissions'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
@@ -252,6 +256,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    emitResourceEvent('workspace', { action: 'created', targetEmail: primaryEmail })
+
     return NextResponse.json(
       {
         user,
@@ -259,6 +265,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     )
+    
   } catch (error: any) {
     console.error('Error creating workspace user:', error)
     return NextResponse.json(

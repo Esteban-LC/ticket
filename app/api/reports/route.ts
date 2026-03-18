@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
@@ -55,6 +59,8 @@ export async function POST(request: NextRequest) {
         userId: user.id,
       },
     })
+
+    emitResourceEvent('reports', { action: 'created', id: report.id })
 
     return NextResponse.json(report, { status: 201 })
   } catch (error) {

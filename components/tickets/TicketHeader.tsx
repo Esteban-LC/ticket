@@ -10,6 +10,7 @@ interface TicketHeaderProps {
   ticket: {
     id: string
     number: number
+    ticketCode: string | null
     subject: string
     status: TicketStatus
     priority: TicketPriority
@@ -42,6 +43,7 @@ const priorityLabels = {
 
 export default function TicketHeader({ ticket, isRequester, canDelete, isCoordinator, isAdminDept, currentUserId }: TicketHeaderProps) {
   const router = useRouter()
+  const ticketIdentifier = ticket.ticketCode || `#${ticket.number}`
   const [agents, setAgents] = useState<Array<{ id: string; name: string | null; email: string }>>([])
   const [updating, setUpdating] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
@@ -145,7 +147,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
           <div>
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                Ticket #{ticket.number}
+                Ticket {ticketIdentifier}
               </h1>
 
               {isRequester ? (
@@ -253,7 +255,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
             </h3>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-            ¿Estás seguro de que deseas eliminar el <span className="font-medium">Ticket #{ticket.number}</span>? Esta acción no se puede deshacer y se eliminarán todos los mensajes asociados.
+            ¿Estás seguro de que deseas eliminar el <span className="font-medium">Ticket {ticketIdentifier}</span>? Esta acción no se puede deshacer y se eliminarán todos los mensajes asociados.
           </p>
           <div className="flex gap-3 justify-end">
             <button

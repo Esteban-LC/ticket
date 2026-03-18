@@ -73,6 +73,7 @@ model User {
 model Ticket {
   id                   String         @id @default(cuid())
   number               Int            @unique @default(autoincrement())
+  ticketCode           String?        @unique
   subject              String
   description          String?
   status               TicketStatus   @default(OPEN)
@@ -101,11 +102,24 @@ model Ticket {
   organization   Organization?  @relation(fields: [organizationId], references: [id])
 
   @@index([status])
+  @@index([ticketCode])
   @@index([customerId])
   @@index([assigneeId])
   @@index([updatedAt])
   @@index([createdAt])
   @@index([priority])
+}
+
+model TicketSequence {
+  id        String   @id @default(cuid())
+  areaCode  String
+  dateKey   String
+  lastValue Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([areaCode, dateKey])
+  @@index([dateKey])
 }
 
 model Category {

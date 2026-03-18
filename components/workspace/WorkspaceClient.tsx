@@ -27,6 +27,7 @@ import {
   canAccessWorkspaceOrgUnits,
   canManageWorkspace,
 } from '@/lib/permissions'
+import { useResourceStream } from '@/lib/useResourceStream'
 
 interface WorkspaceUser {
   id: string
@@ -94,7 +95,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
       if (selectedOrgUnit) params.set('orgUnitPath', selectedOrgUnit)
       params.set('maxResults', searchQuery || selectedOrgUnit ? '100' : '50')
 
-      const res = await fetch(`/api/workspace/users?${params}`)
+      const res = await fetch(`/api/workspace/users?${params}`, { cache: 'no-store' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Error al cargar usuarios')
@@ -116,7 +117,7 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
     }
 
     try {
-      const res = await fetch('/api/workspace/orgunits')
+      const res = await fetch('/api/workspace/orgunits', { cache: 'no-store' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Error al cargar unidades organizativas')
@@ -132,6 +133,10 @@ export default function WorkspaceClient({ currentUser }: WorkspaceClientProps) {
     fetchUsers()
     fetchOrgUnits()
   }, [fetchUsers, fetchOrgUnits])
+  useResourceStream('workspace', () => {
+    fetchUsers()
+    fetchOrgUnits()
+  })
 
   useEffect(() => {
     if (selectedUserEmail && !users.some((u) => u.primaryEmail === selectedUserEmail)) {

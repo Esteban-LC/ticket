@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -24,6 +28,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       },
     })
 
+    emitResourceEvent('reports', { action: 'updated', id: report.id })
+
     return NextResponse.json(report)
   } catch (error) {
     return NextResponse.json({ error: 'Error al actualizar reporte' }, { status: 500 })
@@ -36,6 +42,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     await prisma.report.delete({ where: { id: params.id } })
+
+    emitResourceEvent('reports', { action: 'deleted', id: params.id })
 
     return NextResponse.json({ success: true })
   } catch (error) {

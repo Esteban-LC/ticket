@@ -16,6 +16,8 @@ import {
     Clock,
     Loader2
 } from 'lucide-react'
+import { useResourceStream } from '@/lib/useResourceStream'
+import { emitClientResourceEvent } from '@/lib/clientResourceEvents'
 
 interface AgendaItem {
     id: string
@@ -44,6 +46,13 @@ interface AgendaClientProps {
 }
 
 const OTROS = '__otros__'
+const getTodayDate = () => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
 
 export default function AgendaClient({ user, openTicketsCount, departmentUsers }: AgendaClientProps) {
     const canEdit = user?.role !== 'VIEWER'
@@ -56,7 +65,7 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
     const [itemToDelete, setItemToDelete] = useState<AgendaItem | null>(null)
     const [saving, setSaving] = useState(false)
     const [newItem, setNewItem] = useState<Partial<AgendaItem>>({
-        project: '', subproject: '', deliverable: '', link: '', responsible: '', date: '', status: 'Stand by', observations: ''
+        project: '', subproject: '', deliverable: '', link: '', responsible: '', date: getTodayDate(), status: 'Stand by', observations: ''
     })
     const [newResponsableMode, setNewResponsableMode] = useState<'select' | 'otros'>('select')
     const [editItem, setEditItem] = useState<Partial<AgendaItem>>({})
@@ -76,8 +85,6 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
         }
     }
 
-    useEffect(() => { fetchItems() }, [])
-
     const getStatusStyle = (status: string | undefined) => {
         switch (status) {
             case 'En Proceso': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
@@ -87,6 +94,9 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
         }
     }
 
+    useEffect(() => { fetchItems() }, [])
+    useResourceStream('agenda', fetchItems)
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
         setSaving(true)
@@ -94,8 +104,10 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
             const res = await fetch('/api/agenda', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newItem) })
             if (res.ok) {
                 setItems([...items, await res.json()])
+                emitClientResourceEvent('agenda', { action: 'created' })
+                emitClientResourceEvent('events', { action: 'sync-from-agenda' })
                 setIsCreateModalOpen(false)
-                setNewItem({ project: '', subproject: '', deliverable: '', link: '', responsible: '', date: '', status: 'Stand by', observations: '' })
+                setNewItem({ project: '', subproject: '', deliverable: '', link: '', responsible: '', date: getTodayDate(), status: 'Stand by', observations: '' })
             }
         } catch (error) { console.error('Error:', error) } finally { setSaving(false) }
     }
@@ -117,6 +129,8 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
             if (res.ok) {
                 const updated = await res.json()
                 setItems(items.map(item => item.id === selectedItem.id ? updated : item))
+                emitClientResourceEvent('agenda', { action: 'updated' })
+                emitClientResourceEvent('events', { action: 'sync-from-agenda' })
                 setIsEditModalOpen(false); setSelectedItem(null)
             }
         } catch (error) { console.error('Error:', error) } finally { setSaving(false) }
@@ -129,7 +143,13 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
         setSaving(true)
         try {
             const res = await fetch(`/api/agenda/${itemToDelete.id}`, { method: 'DELETE' })
-            if (res.ok) { setItems(items.filter(i => i.id !== itemToDelete.id)); setIsDeleteModalOpen(false); setItemToDelete(null) }
+            if (res.ok) {
+                setItems(items.filter(i => i.id !== itemToDelete.id))
+                emitClientResourceEvent('agenda', { action: 'deleted' })
+                emitClientResourceEvent('events', { action: 'sync-from-agenda-delete' })
+                setIsDeleteModalOpen(false)
+                setItemToDelete(null)
+            }
         } catch (error) { console.error('Error:', error) } finally { setSaving(false) }
     }
 
@@ -149,7 +169,11 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
                                 <p className="text-gray-600 dark:text-gray-400 mt-1">Cronograma de entregables y responsables</p>
                             </div>
                             {canEdit && (
-                                <button onClick={() => { setNewResponsableMode('select'); setIsCreateModalOpen(true) }} className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors">
+                                <button onClick={() => {
+                                    setNewResponsableMode('select')
+                                    setNewItem({ project: '', subproject: '', deliverable: '', link: '', responsible: '', date: getTodayDate(), status: 'Stand by', observations: '' })
+                                    setIsCreateModalOpen(true)
+                                }} className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors">
                                     <Plus className="h-4 w-4" /> Nuevo Evento
                                 </button>
                             )}
@@ -253,7 +277,7 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
                                         <input type="text" placeholder="Nombre del responsable" className="w-full mt-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.responsible || ''} onChange={(e) => setNewItem({ ...newItem, responsible: e.target.value })} />
                                     )}
                                 </div>
-                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.date || ''} onChange={(e) => setNewItem({ ...newItem, date: e.target.value })} /></div>
+                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="date" required className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.date || ''} onChange={(e) => setNewItem({ ...newItem, date: e.target.value })} /></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label><select className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.status || ''} onChange={(e) => setNewItem({ ...newItem, status: e.target.value })}><option value="En Proceso">En Proceso</option><option value="Completado">Completado</option><option value="Stand by">Stand by</option><option value="Por definir">Por definir</option></select></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link / Documento</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={newItem.link || ''} onChange={(e) => setNewItem({ ...newItem, link: e.target.value })} /></div>
                                 <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observaciones</label><textarea className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" rows={2} value={newItem.observations || ''} onChange={(e) => setNewItem({ ...newItem, observations: e.target.value })} /></div>
@@ -302,7 +326,7 @@ export default function AgendaClient({ user, openTicketsCount, departmentUsers }
                                         <input type="text" placeholder="Nombre del responsable" className="w-full mt-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.responsible || ''} onChange={(e) => setEditItem({ ...editItem, responsible: e.target.value })} />
                                     )}
                                 </div>
-                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.date || ''} onChange={(e) => setEditItem({ ...editItem, date: e.target.value })} /></div>
+                                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Entrega</label><input type="date" required className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.date || ''} onChange={(e) => setEditItem({ ...editItem, date: e.target.value })} /></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estatus</label><select className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.status || ''} onChange={(e) => setEditItem({ ...editItem, status: e.target.value })}><option value="En Proceso">En Proceso</option><option value="Completado">Completado</option><option value="Stand by">Stand by</option><option value="Por definir">Por definir</option></select></div>
                                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link / Documento</label><input type="text" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" value={editItem.link || ''} onChange={(e) => setEditItem({ ...editItem, link: e.target.value })} /></div>
                                 <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observaciones</label><textarea className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white" rows={2} value={editItem.observations || ''} onChange={(e) => setEditItem({ ...editItem, observations: e.target.value })} /></div>

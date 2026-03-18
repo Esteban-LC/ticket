@@ -86,6 +86,8 @@ export default function TicketConversation({ ticket, messages: initialMessages, 
     setMessages(prev => prev.filter(m => m.id !== id))
   }, [])
 
+  const typingUserNames = Array.from(typingUsers.values())
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-4">
@@ -105,7 +107,7 @@ export default function TicketConversation({ ticket, messages: initialMessages, 
       {typingUsers.size > 0 && (
         <div className="px-4 py-1 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 select-none">
           <span>
-            ({[...typingUsers.values()].join(', ')}){' '}
+            ({typingUserNames.join(', ')}){' '}
             {typingUsers.size === 1 ? 'está escribiendo' : 'están escribiendo'}...
           </span>
           <span className="flex gap-0.5 items-center">

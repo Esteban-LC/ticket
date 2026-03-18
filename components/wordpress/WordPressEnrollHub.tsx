@@ -5,6 +5,7 @@ import WordPressBulkEnrollV2 from './WordPressBulkEnrollV2'
 import WordPressUserCourseEnroll from './WordPressUserCourseEnroll'
 import WordPressCourseStudents from './WordPressCourseStudents'
 import EntityHistoryPanel, { EntityHistoryRow } from '@/components/shared/EntityHistoryPanel'
+import { useResourceStream } from '@/lib/useResourceStream'
 
 export interface SharedCourse {
   id: number
@@ -70,6 +71,7 @@ export default function WordPressEnrollHub({ userRole, userPermissions }: Props)
   useEffect(() => {
     fetchAuditEntries()
   }, [])
+  useResourceStream('enrollments', fetchAuditEntries)
 
   const getAuditLabel = (entry: EnrollmentAuditEntry) => {
     if (entry.event === 'enrolled') return `Enrolado por ${entry.actorEmail}`

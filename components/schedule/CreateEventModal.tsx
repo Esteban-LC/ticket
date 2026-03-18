@@ -1,13 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X } from 'lucide-react'
+import { emitClientResourceEvent } from '@/lib/clientResourceEvents'
+import UnsavedChangesDialog from '@/components/ui/UnsavedChangesDialog'
+import { useUnsavedChangesWarning } from '@/lib/useUnsavedChangesWarning'
 
 interface CreateEventModalProps {
     initialDate?: Date
     eventToEdit?: any
     onClose: () => void
-    onEventCreated: () => void
+    onEventCreated: (event?: any) => void
 }
 
 const EVENT_TYPES = [
@@ -47,20 +50,24 @@ export default function CreateEventModal({
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [tickets, setTickets] = useState<any[]>([])
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+
+    const getLocalDate = (date: Date) => {
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+    }
+
+    const getLocalTime = (date: Date) => {
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        return `${hours}:${minutes}`
+    }
 
     useEffect(() => {
         // Cargar tickets disponibles
         fetchTickets()
-
-        // Si hay una fecha inicial, configurarla
-        if (initialDate) {
-            const dateStr = initialDate.toISOString().split('T')[0]
-            setFormData(prev => ({
-                ...prev,
-                startDate: dateStr,
-                endDate: dateStr
-            }))
-        }
 
         // Si hay un evento para editar, cargar sus datos
         if (eventToEdit) {
@@ -70,18 +77,69 @@ export default function CreateEventModal({
             setFormData({
                 title: eventToEdit.title,
                 description: eventToEdit.description || '',
-                startDate: startDate.toISOString().split('T')[0],
-                startTime: eventToEdit.allDay ? '' : startDate.toTimeString().slice(0, 5),
-                endDate: endDate ? endDate.toISOString().split('T')[0] : '',
-                endTime: endDate && !eventToEdit.allDay ? endDate.toTimeString().slice(0, 5) : '',
+                startDate: getLocalDate(startDate),
+                startTime: eventToEdit.allDay ? '' : getLocalTime(startDate),
+                endDate: endDate ? getLocalDate(endDate) : '',
+                endTime: endDate && !eventToEdit.allDay ? getLocalTime(endDate) : '',
                 allDay: eventToEdit.allDay,
                 type: eventToEdit.type,
                 status: eventToEdit.status,
                 color: eventToEdit.color || '#8b5cf6',
                 ticketId: eventToEdit.ticketId || ''
             })
+        } else {
+            const now = new Date()
+            const startSource = initialDate || now
+
+            setFormData({
+                title: '',
+                description: '',
+                startDate: getLocalDate(startSource),
+                startTime: getLocalTime(now),
+                endDate: '',
+                endTime: '',
+                allDay: false,
+                type: 'TASK',
+                status: 'PENDING',
+                color: '#8b5cf6',
+                ticketId: ''
+            })
         }
     }, [initialDate, eventToEdit])
+
+    const hasUnsavedChanges = useMemo(() => {
+        if (eventToEdit) {
+            const startDate = new Date(eventToEdit.startDate)
+            const endDate = eventToEdit.endDate ? new Date(eventToEdit.endDate) : null
+            return (
+                formData.title !== (eventToEdit.title || '') ||
+                formData.description !== (eventToEdit.description || '') ||
+                formData.startDate !== getLocalDate(startDate) ||
+                formData.startTime !== (eventToEdit.allDay ? '' : getLocalTime(startDate)) ||
+                formData.endDate !== (endDate ? getLocalDate(endDate) : '') ||
+                formData.endTime !== (endDate && !eventToEdit.allDay ? getLocalTime(endDate) : '') ||
+                formData.allDay !== Boolean(eventToEdit.allDay) ||
+                formData.type !== eventToEdit.type ||
+                formData.status !== eventToEdit.status ||
+                formData.color !== (eventToEdit.color || '#8b5cf6') ||
+                formData.ticketId !== (eventToEdit.ticketId || '')
+            )
+        }
+
+        return (
+            formData.title.trim() !== '' ||
+            formData.description.trim() !== '' ||
+            formData.endDate.trim() !== '' ||
+            formData.endTime.trim() !== '' ||
+            formData.allDay !== false ||
+            formData.type !== 'TASK' ||
+            formData.status !== 'PENDING' ||
+            formData.color !== '#8b5cf6' ||
+            formData.ticketId !== ''
+        )
+    }, [eventToEdit, formData])
+
+    useUnsavedChangesWarning(hasUnsavedChanges)
 
     const fetchTickets = async () => {
         try {
@@ -133,7 +191,8 @@ export default function CreateEventModal({
             const response = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                cache: 'no-store'
             })
 
             if (!response.ok) {
@@ -141,7 +200,9 @@ export default function CreateEventModal({
                 throw new Error(data.error || 'Error al guardar evento')
             }
 
-            onEventCreated()
+            const savedEvent = await response.json()
+            emitClientResourceEvent('events', { action: eventToEdit ? 'updated' : 'created' })
+            onEventCreated(savedEvent)
         } catch (err: any) {
             setError(err.message)
         } finally {
@@ -158,6 +219,19 @@ export default function CreateEventModal({
         }))
     }
 
+    const handleRequestClose = () => {
+        if (loading) {
+            return
+        }
+
+        if (hasUnsavedChanges) {
+            setShowUnsavedDialog(true)
+            return
+        }
+
+        onClose()
+    }
+
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -167,7 +241,7 @@ export default function CreateEventModal({
                         {eventToEdit ? 'Editar Evento' : 'Nuevo Evento'}
                     </h2>
                     <button
-                        onClick={onClose}
+                        onClick={handleRequestClose}
                         className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500 dark:text-gray-400"
                     >
                         <X className="w-5 h-5" />
@@ -357,7 +431,7 @@ export default function CreateEventModal({
                     <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleRequestClose}
                             className="px-6 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors font-medium"
                         >
                             Cancelar
@@ -372,6 +446,14 @@ export default function CreateEventModal({
                     </div>
                 </form>
             </div>
+            <UnsavedChangesDialog
+                isOpen={showUnsavedDialog}
+                onKeepEditing={() => setShowUnsavedDialog(false)}
+                onDiscard={() => {
+                    setShowUnsavedDialog(false)
+                    onClose()
+                }}
+            />
         </div>
     )
 }

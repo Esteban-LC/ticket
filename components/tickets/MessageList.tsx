@@ -25,7 +25,7 @@ function isEmojiOnly(text: string): boolean {
   const trimmed = text.trim()
   if (!trimmed || trimmed.length > 12) return false
   // Remove emoji and whitespace — if nothing remains, it's emoji-only
-  return !/[^\p{Emoji}\u200d\ufe0f\s]/u.test(trimmed)
+  return !/[^\u00a9\u00ae\u200d\u203c-\u3299\ud83c-\udbff\udc00-\udfff\s\ufe0f]/.test(trimmed)
 }
 
 // Render text with clickable URLs

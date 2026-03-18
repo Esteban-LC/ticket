@@ -10,6 +10,10 @@ import {
 import { logAdminAction } from '@/lib/admin-log'
 import { prisma } from '@/lib/prisma'
 import { canAccessWorkspace, canManageWorkspace } from '@/lib/permissions'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
@@ -115,6 +119,11 @@ export async function PATCH(
       })
     }
 
+    emitResourceEvent('workspace', {
+      action: action === 'suspend' ? 'suspended' : action === 'unsuspend' ? 'unsuspended' : 'updated',
+      targetEmail: params.userKey,
+    })
+
     return NextResponse.json(user)
   } catch (error: any) {
     console.error('Error updating workspace user:', error)
@@ -152,6 +161,8 @@ export async function DELETE(
       adminEmail: session.user.email!,
       targetEmail: params.userKey,
     })
+
+    emitResourceEvent('workspace', { action: 'deleted', targetEmail: params.userKey })
 
     return NextResponse.json({ success: true, message: 'Usuario eliminado correctamente' })
   } catch (error: any) {

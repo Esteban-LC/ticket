@@ -4,6 +4,10 @@ import { authOptions } from '@/lib/auth'
 import { tutorLMSService } from '@/lib/wordpress/tutor-lms'
 import { wooCommerceService } from '@/lib/wordpress/woocommerce'
 import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/wordpress/enroll
@@ -94,6 +98,13 @@ export async function POST(request: NextRequest) {
         ])
       }
 
+      emitResourceEvent('enrollments', {
+        action: 'enrolled',
+        mode: 'user_to_courses',
+        userId: user_id,
+        courseIds: course_ids,
+      })
+
       return NextResponse.json({
         success: true,
         order_id: order.id,
@@ -140,6 +151,13 @@ export async function POST(request: NextRequest) {
           },
         })
       }
+      emitResourceEvent('enrollments', {
+        action: 'enrolled',
+        mode: 'single',
+        userId: user_id,
+        courseIds: [course_id],
+      })
+
       return NextResponse.json({ success: true, result }, { status: 201 })
     }
 
@@ -208,6 +226,13 @@ export async function POST(request: NextRequest) {
 
     const successCount = results.filter(r => r.success).length
     const failedCount = results.length - successCount
+
+    emitResourceEvent('enrollments', {
+      action: 'enrolled',
+      mode: 'course_to_users',
+      userIds: uniqueTargets,
+      courseIds: [course_id],
+    })
 
     return NextResponse.json({
       success: failedCount === 0,
@@ -282,6 +307,13 @@ export async function DELETE(request: NextRequest) {
           },
         })
       }
+      emitResourceEvent('enrollments', {
+        action: 'unenrolled',
+        mode: 'single',
+        userId: user_id,
+        courseIds: [course_id],
+      })
+
       return NextResponse.json({ success: true, result })
     }
 
@@ -321,6 +353,13 @@ export async function DELETE(request: NextRequest) {
 
     const successCount = results.filter(r => r.success).length
     const failedCount = results.length - successCount
+
+    emitResourceEvent('enrollments', {
+      action: 'unenrolled',
+      mode: 'bulk',
+      userIds: uniqueTargets,
+      courseIds: [course_id],
+    })
 
     return NextResponse.json({
       success: failedCount === 0,

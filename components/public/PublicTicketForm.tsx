@@ -12,7 +12,7 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [ticketNumber, setTicketNumber] = useState<number | null>(null)
+  const [ticketIdentifier, setTicketIdentifier] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     subject: '',
     description: '',
@@ -36,7 +36,7 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
 
       if (response.ok) {
         const ticket = await response.json()
-        setTicketNumber(ticket.number)
+        setTicketIdentifier(ticket.ticketCode || `#${ticket.number}`)
         setSuccess(true)
         setFormData({
           subject: '',
@@ -61,7 +61,7 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
           ¡Ticket Creado!
         </h2>
         <p className="text-gray-600 mb-4">
-          Tu ticket #{ticketNumber} ha sido creado exitosamente.
+          Tu ticket {ticketIdentifier} ha sido creado exitosamente.
         </p>
         <p className="text-sm text-gray-500 mb-6">
           Nuestro equipo de soporte lo revisará pronto y te contactará por email.
