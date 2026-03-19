@@ -14,6 +14,7 @@ interface TicketDetailClientProps {
   canDelete?: boolean
   isCoordinator?: boolean
   isAdminDept?: boolean
+  canManagePriority?: boolean
 }
 
 export default function TicketDetailClient({
@@ -26,6 +27,7 @@ export default function TicketDetailClient({
   canDelete,
   isCoordinator,
   isAdminDept,
+  canManagePriority,
 }: TicketDetailClientProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
@@ -37,6 +39,7 @@ export default function TicketDetailClient({
         canDelete={canDelete}
         isCoordinator={isCoordinator}
         isAdminDept={isAdminDept}
+        canManagePriority={canManagePriority}
         currentUserId={currentUserId}
         onOpenDetails={() => setDetailsOpen(true)}
       />

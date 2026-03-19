@@ -137,6 +137,10 @@ export default async function TicketDetailPage({
   const isRequester = (user.role === 'EDITOR' || user.role === 'VIEWER') && user.id === ticket.customerId
   // Coordinator = COORDINATOR role (any dept head) OR explicit permission (for ADMIN users who also coordinate)
   const isCoordinator = user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')
+  const canManagePriority =
+    user.role === 'ADMIN' ||
+    user.role === 'COORDINATOR' ||
+    user.permissions.includes('tickets:coordinator')
   // Only coordinators can delete tickets
   const canDelete = user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')
 
@@ -155,6 +159,7 @@ export default async function TicketDetailPage({
           canDelete={canDelete}
           isCoordinator={isCoordinator}
           isAdminDept={isAdminDept}
+          canManagePriority={canManagePriority}
         />
       </main>
     </div>

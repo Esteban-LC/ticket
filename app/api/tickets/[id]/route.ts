@@ -153,6 +153,8 @@ export async function PATCH(
       user.role === 'COORDINATOR' ||
       user.permissions.includes('tickets:coordinator')
 
+    const canManagePriority = canManageAssignments
+
     // Solo COORDINATOR+ puede cambiar estado o asignado
     if (
       (data.status !== undefined || data.assigneeId !== undefined) &&
@@ -176,6 +178,10 @@ export async function PATCH(
       if (!isClosingOwnTicket && !isTakingTicketAsAdminDept) {
         return NextResponse.json({ error: 'No autorizado para esta acción' }, { status: 403 })
       }
+    }
+
+    if (data.priority !== undefined && !canManagePriority) {
+      return NextResponse.json({ error: 'No autorizado para cambiar la prioridad' }, { status: 403 })
     }
 
     // Obtener el ticket actual para comparar el estado

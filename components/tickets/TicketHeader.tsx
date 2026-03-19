@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { TicketStatus, TicketPriority } from '@prisma/client'
-import { ArrowLeft, User, MoreVertical, Trash2, AlertTriangle, Info, CheckCircle2, CircleDot, PauseCircle, Lock } from 'lucide-react'
+import { ArrowLeft, User, MoreVertical, Trash2, AlertTriangle, Info, CheckCircle2, CircleDot, PauseCircle, Lock, Menu } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useTheme } from '@/contexts/ThemeContext'
+import { useSidebar } from '@/contexts/SidebarContext'
 
 interface TicketHeaderProps {
   ticket: {
@@ -24,6 +26,7 @@ interface TicketHeaderProps {
   canDelete?: boolean
   isCoordinator?: boolean
   isAdminDept?: boolean
+  canManagePriority?: boolean
   currentUserId?: string
   onOpenDetails?: () => void
 }
@@ -42,8 +45,10 @@ const priorityLabels = {
   URGENT: 'Urgente',
 }
 
-export default function TicketHeader({ ticket, isRequester, canDelete, isCoordinator, isAdminDept, currentUserId, onOpenDetails }: TicketHeaderProps) {
+export default function TicketHeader({ ticket, isRequester, canDelete, isCoordinator, isAdminDept, canManagePriority, currentUserId, onOpenDetails }: TicketHeaderProps) {
   const router = useRouter()
+  const { theme } = useTheme()
+  const { toggle } = useSidebar()
   const ticketIdentifier = ticket.ticketCode || `#${ticket.number}`
   const [agents, setAgents] = useState<Array<{ id: string; name: string | null; email: string }>>([])
   const [updating, setUpdating] = useState(false)
@@ -53,6 +58,29 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
   const menuRef = useRef<HTMLDivElement>(null)
   const canManageStatus = !isRequester
   const showActionsMenu = Boolean(onOpenDetails) || canManageStatus || Boolean(canDelete)
+  const isDarkTheme = theme === 'dark'
+  const menuPanelClass = isDarkTheme
+    ? 'absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-[#1f2c33]/98 text-white shadow-2xl backdrop-blur-xl'
+    : 'absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl'
+  const menuButtonClass = isDarkTheme
+    ? 'w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5'
+    : 'w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100'
+  const menuHeaderClass = isDarkTheme
+    ? 'px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-400'
+    : 'px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-gray-500'
+  const menuDividerClass = isDarkTheme
+    ? 'mx-4 border-t border-white/10'
+    : 'mx-4 border-t border-gray-200'
+  const inlineSelectWrapClass = isDarkTheme
+    ? 'flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2'
+    : 'flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2'
+  const inlineSelectClass = isDarkTheme
+    ? 'min-w-0 w-full bg-transparent text-sm text-slate-100 outline-none disabled:opacity-50'
+    : 'min-w-0 w-full bg-transparent text-sm text-gray-900 outline-none disabled:opacity-50'
+  const menuIconClass = isDarkTheme ? 'h-4 w-4 text-slate-300' : 'h-4 w-4 text-gray-400'
+  const dangerButtonClass = isDarkTheme
+    ? 'w-full flex items-center gap-2 px-4 py-3 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10'
+    : 'w-full flex items-center gap-2 px-4 py-3 text-left text-sm text-red-500 transition-colors hover:bg-red-50'
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -121,6 +149,25 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
     }
   }
 
+  const handlePriorityChange = async (priority: TicketPriority) => {
+    setUpdating(true)
+    try {
+      const response = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority })
+      })
+
+      if (response.ok) {
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error updating priority:', error)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   const handleDeleteTicket = async () => {
     setDeleting(true)
     try {
@@ -139,149 +186,207 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
   return (
     <>
     <div className="shrink-0 border-b border-gray-200 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800 sm:px-4 lg:px-6 lg:py-4">
-      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-start gap-2.5 lg:gap-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="lg:hidden">
+          <div className="grid grid-cols-[auto,1fr,auto] items-center gap-1">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={toggle}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-300"
+                aria-label="Abrir menu del dashboard"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <Link
+                href="/dashboard"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-300"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </div>
+
+            <h1 className="min-w-0 truncate px-1 text-center text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+              {ticketIdentifier}
+            </h1>
+
+            {showActionsMenu ? (
+              <div className="relative justify-self-end" ref={menuRef}>
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  aria-label="Abrir acciones del ticket"
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
+                >
+                  <MoreVertical className="h-5 w-5" />
+                </button>
+                {showMenu && (
+                  <div className={menuPanelClass}>
+                    {onOpenDetails && (
+                      <button
+                        onClick={() => { setShowMenu(false); onOpenDetails() }}
+                        className={isDarkTheme ? 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-100 transition-colors hover:bg-white/5' : 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100'}
+                      >
+                        <Info className={menuIconClass} />
+                        Info. del ticket
+                      </button>
+                    )}
+
+                    {onOpenDetails && (canManageStatus || canDelete) && (
+                      <div className={menuDividerClass} />
+                    )}
+
+                    {isCoordinator && (
+                      <>
+                        <div className={`${menuHeaderClass} lg:hidden`}>
+                          Asignacion
+                        </div>
+
+                        <div className="px-4 pb-3 lg:hidden">
+                          <div className={inlineSelectWrapClass}>
+                            <User className={`${menuIconClass} flex-shrink-0`} />
+                            <select
+                              value={ticket.assignee?.id || ''}
+                              onChange={(e) => {
+                                setShowMenu(false)
+                                handleAssigneeChange(e.target.value)
+                              }}
+                              disabled={updating}
+                              className={inlineSelectClass}
+                            >
+                              <option value="" className={isDarkTheme ? 'bg-slate-800 text-slate-100' : 'bg-white text-gray-900'}>Sin asignar</option>
+                              {Array.isArray(agents) && agents.map(agent => (
+                                <option key={agent.id} value={agent.id} className={isDarkTheme ? 'bg-slate-800 text-slate-100' : 'bg-white text-gray-900'}>
+                                  {agent.name || agent.email}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className={`${menuDividerClass} lg:hidden`} />
+                      </>
+                    )}
+
+                    {canManagePriority && (
+                      <>
+                        <div className={menuHeaderClass}>
+                          Prioridad
+                        </div>
+
+                        {(['LOW', 'NORMAL', 'HIGH', 'URGENT'] as TicketPriority[]).map((priority) => (
+                          <button
+                            key={priority}
+                            onClick={() => { setShowMenu(false); handlePriorityChange(priority) }}
+                            className={menuButtonClass}
+                          >
+                            {priorityLabels[priority]}
+                          </button>
+                        ))}
+
+                        <div className={menuDividerClass} />
+                      </>
+                    )}
+
+                    {canManageStatus && (
+                      <>
+                        <div className={menuHeaderClass}>
+                          Estado
+                        </div>
+
+                        <button
+                          onClick={() => { setShowMenu(false); handleStatusChange('OPEN') }}
+                          className={menuButtonClass}
+                        >
+                          <CircleDot className={menuIconClass} />
+                          Marcar como abierto
+                        </button>
+                        <button
+                          onClick={() => { setShowMenu(false); handleStatusChange('PENDING') }}
+                          className={menuButtonClass}
+                        >
+                          <PauseCircle className={menuIconClass} />
+                          Marcar como pendiente
+                        </button>
+                        <button
+                          onClick={() => { setShowMenu(false); handleStatusChange('SOLVED') }}
+                          className={menuButtonClass}
+                        >
+                          <CheckCircle2 className={menuIconClass} />
+                          Marcar como resuelto
+                        </button>
+                        <button
+                          onClick={() => { setShowMenu(false); handleStatusChange('CLOSED') }}
+                          className={menuButtonClass}
+                        >
+                          <Lock className={menuIconClass} />
+                          Marcar como cerrado
+                        </button>
+                      </>
+                    )}
+
+                    {canDelete && (onOpenDetails || canManageStatus) && (
+                      <div className={`${menuDividerClass} mt-1`} />
+                    )}
+
+                    {canDelete && (
+                      <button
+                        onClick={() => { setShowMenu(false); setShowDeleteConfirm(true) }}
+                        className={dangerButtonClass}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Eliminar ticket
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div />
+            )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <span className="inline-flex w-fit rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-100">
+              {statusLabels[ticket.status]}
+            </span>
+
+            <span className="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900 dark:bg-slate-700 dark:text-gray-100">
+              {priorityLabels[ticket.priority]}
+            </span>
+          </div>
+
+          <p className="mt-2 break-words text-center text-sm text-gray-600 dark:text-gray-400">
+            {ticket.subject}
+          </p>
+        </div>
+
+        <div className="hidden min-w-0 flex-1 items-start gap-2.5 lg:flex lg:gap-4">
           <Link
             href="/dashboard"
             className="mt-0.5 flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-400"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
+
           <div className="min-w-0 flex-1">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-start justify-between gap-2 lg:block">
-                <h1 className="pr-2 text-lg font-bold leading-tight text-gray-900 break-words dark:text-gray-100 lg:text-2xl">
-                  Ticket {ticketIdentifier}
-                </h1>
+            <h1 className="pr-2 text-lg font-bold leading-tight text-gray-900 break-words dark:text-gray-100 lg:text-2xl">
+              Ticket {ticketIdentifier}
+            </h1>
 
-                {showActionsMenu && (
-                  <div className="relative -mr-1 lg:hidden" ref={menuRef}>
-                    <button
-                      onClick={() => setShowMenu(!showMenu)}
-                      aria-label="Abrir acciones del ticket"
-                      className="flex-shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
-                    >
-                      <MoreVertical className="h-5 w-5" />
-                    </button>
-                    {showMenu && (
-                      <div className="absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-[#1f2c33]/98 text-white shadow-2xl backdrop-blur-xl">
-                        {onOpenDetails && (
-                          <button
-                            onClick={() => { setShowMenu(false); onOpenDetails() }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
-                          >
-                            <Info className="h-4 w-4 text-slate-300" />
-                            Info. del ticket
-                          </button>
-                        )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex w-fit rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-100">
+                {statusLabels[ticket.status]}
+              </span>
 
-                        {onOpenDetails && (canManageStatus || canDelete) && (
-                          <div className="mx-4 border-t border-white/10" />
-                        )}
-
-                        {isCoordinator && (
-                          <>
-                            <div className="px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-400 lg:hidden">
-                              Asignacion
-                            </div>
-
-                            <div className="px-4 pb-3 lg:hidden">
-                              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                                <User className="h-4 w-4 flex-shrink-0 text-slate-300" />
-                                <select
-                                  value={ticket.assignee?.id || ''}
-                                  onChange={(e) => {
-                                    setShowMenu(false)
-                                    handleAssigneeChange(e.target.value)
-                                  }}
-                                  disabled={updating}
-                                  className="min-w-0 w-full bg-transparent text-sm text-slate-100 outline-none disabled:opacity-50"
-                                >
-                                  <option value="" className="bg-slate-800 text-slate-100">Sin asignar</option>
-                                  {Array.isArray(agents) && agents.map(agent => (
-                                    <option key={agent.id} value={agent.id} className="bg-slate-800 text-slate-100">
-                                      {agent.name || agent.email}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-
-                            <div className="mx-4 border-t border-white/10 lg:hidden" />
-                          </>
-                        )}
-
-                        {canManageStatus && (
-                          <>
-                            <div className="px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                              Estado
-                            </div>
-
-                            <button
-                              onClick={() => { setShowMenu(false); handleStatusChange('OPEN') }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
-                            >
-                              <CircleDot className="h-4 w-4 text-slate-300" />
-                              Marcar como abierto
-                            </button>
-                            <button
-                              onClick={() => { setShowMenu(false); handleStatusChange('PENDING') }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
-                            >
-                              <PauseCircle className="h-4 w-4 text-slate-300" />
-                              Marcar como pendiente
-                            </button>
-                            <button
-                              onClick={() => { setShowMenu(false); handleStatusChange('SOLVED') }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
-                            >
-                              <CheckCircle2 className="h-4 w-4 text-slate-300" />
-                              Marcar como resuelto
-                            </button>
-                            <button
-                              onClick={() => { setShowMenu(false); handleStatusChange('CLOSED') }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
-                            >
-                              <Lock className="h-4 w-4 text-slate-300" />
-                              Marcar como cerrado
-                            </button>
-                          </>
-                        )}
-
-                        {canDelete && (onOpenDetails || canManageStatus) && (
-                          <div className="mx-4 mt-1 border-t border-white/10" />
-                        )}
-
-                        {canDelete && (
-                          <button
-                            onClick={() => { setShowMenu(false); setShowDeleteConfirm(true) }}
-                            className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Eliminar ticket
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex w-fit rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-100">
-                  {statusLabels[ticket.status]}
-                </span>
-
-                <span className="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900 dark:bg-slate-700 dark:text-gray-100">
-                  Prioridad: {priorityLabels[ticket.priority]}
-                </span>
-              </div>
+              <span className="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900 dark:bg-slate-700 dark:text-gray-100">
+                Prioridad: {priorityLabels[ticket.priority]}
+              </span>
             </div>
+
             <p className="mt-1 break-words text-sm text-gray-600 dark:text-gray-400 lg:text-base">{ticket.subject}</p>
           </div>
         </div>
 
-        {/* Assignee + actions menu */}
         <div className="flex w-full items-center justify-end gap-2 lg:w-auto lg:gap-3">
           {isRequester ? (
             ticket.status === 'OPEN' || ticket.status === 'PENDING' ? (
@@ -295,6 +400,20 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
             ) : null
           ) : isCoordinator ? (
             <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex lg:flex-none">
+              {canManagePriority && (
+                <select
+                  value={ticket.priority}
+                  onChange={(e) => handlePriorityChange(e.target.value as TicketPriority)}
+                  disabled={updating}
+                  className="min-w-0 w-full lg:w-auto lg:min-w-[150px] px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                >
+                  <option value="LOW">Baja</option>
+                  <option value="NORMAL">Normal</option>
+                  <option value="HIGH">Alta</option>
+                  <option value="URGENT">Urgente</option>
+                </select>
+              )}
+
               <User className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
               <select
                 value={ticket.assignee?.id || ''}
@@ -328,34 +447,34 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                 onClick={() => setShowMenu(!showMenu)}
                 aria-label="Abrir acciones del ticket"
                 className="flex-shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
-              >
-                <MoreVertical className="h-5 w-5" />
-              </button>
-              {showMenu && (
-                <div className="absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-[#1f2c33]/98 text-white shadow-2xl backdrop-blur-xl">
+                >
+                  <MoreVertical className="h-5 w-5" />
+                </button>
+                {showMenu && (
+                  <div className={menuPanelClass}>
                   {onOpenDetails && (
                     <button
                       onClick={() => { setShowMenu(false); onOpenDetails() }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
+                      className={isDarkTheme ? 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-100 transition-colors hover:bg-white/5' : 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100'}
                     >
-                      <Info className="h-4 w-4 text-slate-300" />
+                      <Info className={menuIconClass} />
                       Info. del ticket
                     </button>
                   )}
 
                   {onOpenDetails && (canManageStatus || canDelete) && (
-                    <div className="mx-4 border-t border-white/10" />
+                    <div className={menuDividerClass} />
                   )}
 
                   {isCoordinator && (
                     <>
-                      <div className="px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-400 lg:hidden">
+                      <div className={`${menuHeaderClass} lg:hidden`}>
                         Asignacion
                       </div>
 
                       <div className="px-4 pb-3 lg:hidden">
-                        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                          <User className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                        <div className={inlineSelectWrapClass}>
+                          <User className={`${menuIconClass} flex-shrink-0`} />
                           <select
                             value={ticket.assignee?.id || ''}
                             onChange={(e) => {
@@ -363,11 +482,11 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                               handleAssigneeChange(e.target.value)
                             }}
                             disabled={updating}
-                            className="min-w-0 w-full bg-transparent text-sm text-slate-100 outline-none disabled:opacity-50"
+                            className={inlineSelectClass}
                           >
-                            <option value="" className="bg-slate-800 text-slate-100">Sin asignar</option>
+                            <option value="" className={isDarkTheme ? 'bg-slate-800 text-slate-100' : 'bg-white text-gray-900'}>Sin asignar</option>
                             {Array.isArray(agents) && agents.map(agent => (
-                              <option key={agent.id} value={agent.id} className="bg-slate-800 text-slate-100">
+                              <option key={agent.id} value={agent.id} className={isDarkTheme ? 'bg-slate-800 text-slate-100' : 'bg-white text-gray-900'}>
                                 {agent.name || agent.email}
                               </option>
                             ))}
@@ -375,64 +494,84 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                         </div>
                       </div>
 
-                      <div className="mx-4 border-t border-white/10 lg:hidden" />
+                      <div className={`${menuDividerClass} lg:hidden`} />
+                    </>
+                  )}
+
+                  {canManagePriority && (
+                    <>
+                      <div className={menuHeaderClass}>
+                        Prioridad
+                      </div>
+
+                      {(['LOW', 'NORMAL', 'HIGH', 'URGENT'] as TicketPriority[]).map((priority) => (
+                        <button
+                          key={priority}
+                          onClick={() => { setShowMenu(false); handlePriorityChange(priority) }}
+                          className={menuButtonClass}
+                        >
+                          {priorityLabels[priority]}
+                        </button>
+                      ))}
+
+                      <div className={menuDividerClass} />
                     </>
                   )}
 
                   {canManageStatus && (
                     <>
-                      <div className="px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                      <div className={menuHeaderClass}>
                         Estado
                       </div>
 
                       <button
                         onClick={() => { setShowMenu(false); handleStatusChange('OPEN') }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
+                        className={menuButtonClass}
                       >
-                        <CircleDot className="h-4 w-4 text-slate-300" />
+                        <CircleDot className={menuIconClass} />
                         Marcar como abierto
                       </button>
                       <button
                         onClick={() => { setShowMenu(false); handleStatusChange('PENDING') }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
+                        className={menuButtonClass}
                       >
-                        <PauseCircle className="h-4 w-4 text-slate-300" />
+                        <PauseCircle className={menuIconClass} />
                         Marcar como pendiente
                       </button>
                       <button
                         onClick={() => { setShowMenu(false); handleStatusChange('SOLVED') }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
+                        className={menuButtonClass}
                       >
-                        <CheckCircle2 className="h-4 w-4 text-slate-300" />
+                        <CheckCircle2 className={menuIconClass} />
                         Marcar como resuelto
                       </button>
                       <button
                         onClick={() => { setShowMenu(false); handleStatusChange('CLOSED') }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5"
+                        className={menuButtonClass}
                       >
-                        <Lock className="h-4 w-4 text-slate-300" />
+                        <Lock className={menuIconClass} />
                         Marcar como cerrado
                       </button>
                     </>
                   )}
 
                   {canDelete && (onOpenDetails || canManageStatus) && (
-                    <div className="mx-4 mt-1 border-t border-white/10" />
+                    <div className={`${menuDividerClass} mt-1`} />
                   )}
 
                   {canDelete && (
                     <button
                       onClick={() => { setShowMenu(false); setShowDeleteConfirm(true) }}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10"
+                      className={dangerButtonClass}
                     >
                       <Trash2 className="h-4 w-4" />
                       Eliminar ticket
                     </button>
                   )}
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            )}
         </div>
       </div>
     </div>

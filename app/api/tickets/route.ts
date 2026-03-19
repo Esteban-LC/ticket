@@ -151,6 +151,22 @@ export async function POST(request: Request) {
       )
     }
 
+    const currentUser = session?.user?.email
+      ? await prisma.user.findUnique({
+          where: { email: session.user.email || '' },
+          select: {
+            id: true,
+            role: true,
+            permissions: true,
+          }
+        })
+      : null
+
+    const canSetPriority =
+      currentUser?.role === 'ADMIN' ||
+      currentUser?.role === 'COORDINATOR' ||
+      currentUser?.permissions.includes('tickets:coordinator')
+
     // Verificar que el usuario existe
     const userExists = await prisma.user.findUnique({
       where: { id: finalCustomerId },
@@ -175,7 +191,7 @@ export async function POST(request: Request) {
     const ticketData: any = {
       subject,
       description,
-      priority: priority || 'NORMAL',
+      priority: canSetPriority ? (priority || 'NORMAL') : 'NORMAL',
       tags: tags || [],
       attachments: attachments || [],
       customerId: finalCustomerId,
