@@ -5,7 +5,6 @@ import { TicketStatus, TicketPriority } from '@prisma/client'
 import { ArrowLeft, User, MoreVertical, Trash2, AlertTriangle, Info, CheckCircle2, CircleDot, PauseCircle, Lock, Menu } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useTheme } from '@/contexts/ThemeContext'
 import { useSidebar } from '@/contexts/SidebarContext'
 
 interface TicketHeaderProps {
@@ -47,7 +46,6 @@ const priorityLabels = {
 
 export default function TicketHeader({ ticket, isRequester, canDelete, isCoordinator, isAdminDept, canManagePriority, currentUserId, onOpenDetails }: TicketHeaderProps) {
   const router = useRouter()
-  const { theme } = useTheme()
   const { toggle } = useSidebar()
   const ticketIdentifier = ticket.ticketCode || `#${ticket.number}`
   const [agents, setAgents] = useState<Array<{ id: string; name: string | null; email: string }>>([])
@@ -55,12 +53,13 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
   const [showMenu, setShowMenu] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [isDarkTheme, setIsDarkTheme] = useState(false)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
+  const desktopMenuRef = useRef<HTMLDivElement>(null)
   const canManageStatus = !isRequester
   const showActionsMenu = Boolean(onOpenDetails) || canManageStatus || Boolean(canDelete)
-  const isDarkTheme = theme === 'dark'
   const menuPanelClass = isDarkTheme
-    ? 'absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-[#1f2c33]/98 text-white shadow-2xl backdrop-blur-xl'
+    ? 'absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 text-white shadow-2xl'
     : 'absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl'
   const menuButtonClass = isDarkTheme
     ? 'w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-100 transition-colors hover:bg-white/5'
@@ -83,13 +82,48 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
     : 'w-full flex items-center gap-2 px-4 py-3 text-left text-sm text-red-500 transition-colors hover:bg-red-50'
 
   useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const syncTheme = () => {
+      setIsDarkTheme(document.documentElement.classList.contains('dark'))
+    }
+
+    syncTheme()
+
+    const observer = new MutationObserver(syncTheme)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const clickedInsideMobile = mobileMenuRef.current?.contains(target)
+      const clickedInsideDesktop = desktopMenuRef.current?.contains(target)
+      if (!clickedInsideMobile && !clickedInsideDesktop) {
         setShowMenu(false)
       }
     }
-    if (showMenu) document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+
+    const handleTouchOutside = (e: TouchEvent) => {
+      const target = e.target as Node
+      const touchedInsideMobile = mobileMenuRef.current?.contains(target)
+      const touchedInsideDesktop = desktopMenuRef.current?.contains(target)
+      if (!touchedInsideMobile && !touchedInsideDesktop) {
+        setShowMenu(false)
+      }
+    }
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('touchstart', handleTouchOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleTouchOutside)
+    }
   }, [showMenu])
 
   useEffect(() => {
@@ -183,11 +217,22 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
     }
   }
 
+  const handleToggleMenu = () => {
+    setShowMenu((prev) => !prev)
+  }
+
+  const handleOpenDetails = () => {
+    setShowMenu(false)
+    requestAnimationFrame(() => {
+      onOpenDetails?.()
+    })
+  }
+
   return (
     <>
     <div className="shrink-0 border-b border-gray-200 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800 sm:px-4 lg:px-6 lg:py-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="lg:hidden">
+        <div className="relative lg:hidden">
           <div className="grid grid-cols-[auto,1fr,auto] items-center gap-1">
             <div className="flex items-center gap-1">
               <button
@@ -198,12 +243,6 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <Link
-                href="/dashboard"
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-slate-700 dark:hover:text-gray-300"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
             </div>
 
             <h1 className="min-w-0 truncate px-1 text-center text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">
@@ -211,19 +250,25 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
             </h1>
 
             {showActionsMenu ? (
-              <div className="relative justify-self-end" ref={menuRef}>
+              <div className="relative justify-self-end" ref={mobileMenuRef}>
                 <button
-                  onClick={() => setShowMenu(!showMenu)}
+                  type="button"
+                  onClick={handleToggleMenu}
                   aria-label="Abrir acciones del ticket"
                   className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
                 >
                   <MoreVertical className="h-5 w-5" />
                 </button>
                 {showMenu && (
-                  <div className={menuPanelClass}>
+                  <div
+                    className={menuPanelClass}
+                    onClick={(event) => event.stopPropagation()}
+                    onTouchStart={(event) => event.stopPropagation()}
+                  >
                     {onOpenDetails && (
                       <button
-                        onClick={() => { setShowMenu(false); onOpenDetails() }}
+                        type="button"
+                        onClick={handleOpenDetails}
                         className={isDarkTheme ? 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-100 transition-colors hover:bg-white/5' : 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100'}
                       >
                         <Info className={menuIconClass} />
@@ -274,10 +319,11 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                         </div>
 
                         {(['LOW', 'NORMAL', 'HIGH', 'URGENT'] as TicketPriority[]).map((priority) => (
-                          <button
-                            key={priority}
-                            onClick={() => { setShowMenu(false); handlePriorityChange(priority) }}
-                            className={menuButtonClass}
+                              <button
+                                type="button"
+                                key={priority}
+                                onClick={() => { setShowMenu(false); handlePriorityChange(priority) }}
+                                className={menuButtonClass}
                           >
                             {priorityLabels[priority]}
                           </button>
@@ -294,6 +340,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                         </div>
 
                         <button
+                          type="button"
                           onClick={() => { setShowMenu(false); handleStatusChange('OPEN') }}
                           className={menuButtonClass}
                         >
@@ -301,6 +348,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                           Marcar como abierto
                         </button>
                         <button
+                          type="button"
                           onClick={() => { setShowMenu(false); handleStatusChange('PENDING') }}
                           className={menuButtonClass}
                         >
@@ -308,6 +356,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                           Marcar como pendiente
                         </button>
                         <button
+                          type="button"
                           onClick={() => { setShowMenu(false); handleStatusChange('SOLVED') }}
                           className={menuButtonClass}
                         >
@@ -315,6 +364,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                           Marcar como resuelto
                         </button>
                         <button
+                          type="button"
                           onClick={() => { setShowMenu(false); handleStatusChange('CLOSED') }}
                           className={menuButtonClass}
                         >
@@ -330,6 +380,7 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
 
                     {canDelete && (
                       <button
+                        type="button"
                         onClick={() => { setShowMenu(false); setShowDeleteConfirm(true) }}
                         className={dangerButtonClass}
                       >
@@ -345,17 +396,27 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
             )}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-            <span className="inline-flex w-fit rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-100">
-              {statusLabels[ticket.status]}
-            </span>
+          <div className="mt-2 flex flex-col items-center">
+            <Link
+              href="/dashboard"
+              className="absolute left-1 top-[3.5rem] inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600 dark:hover:text-white"
+              aria-label="Regresar al dashboard"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
 
-            <span className="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900 dark:bg-slate-700 dark:text-gray-100">
-              {priorityLabels[ticket.priority]}
-            </span>
+            <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
+              <span className="inline-flex w-fit rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-100">
+                {statusLabels[ticket.status]}
+              </span>
+
+              <span className="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-900 dark:bg-slate-700 dark:text-gray-100">
+                {priorityLabels[ticket.priority]}
+              </span>
+            </div>
           </div>
 
-          <p className="mt-2 break-words text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="mx-auto mt-2 max-w-[220px] break-words text-center text-sm text-gray-600 dark:text-gray-400">
             {ticket.subject}
           </p>
         </div>
@@ -442,19 +503,25 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
           ) : null}
 
           {showActionsMenu && (
-            <div className="relative hidden lg:block" ref={menuRef}>
+            <div className="relative hidden lg:block" ref={desktopMenuRef}>
               <button
-                onClick={() => setShowMenu(!showMenu)}
+                type="button"
+                onClick={handleToggleMenu}
                 aria-label="Abrir acciones del ticket"
                 className="flex-shrink-0 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
                 >
                   <MoreVertical className="h-5 w-5" />
                 </button>
                 {showMenu && (
-                  <div className={menuPanelClass}>
+                  <div
+                    className={menuPanelClass}
+                    onClick={(event) => event.stopPropagation()}
+                    onTouchStart={(event) => event.stopPropagation()}
+                  >
                   {onOpenDetails && (
                     <button
-                      onClick={() => { setShowMenu(false); onOpenDetails() }}
+                      type="button"
+                      onClick={handleOpenDetails}
                       className={isDarkTheme ? 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-100 transition-colors hover:bg-white/5' : 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100'}
                     >
                       <Info className={menuIconClass} />
@@ -505,10 +572,11 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                       </div>
 
                       {(['LOW', 'NORMAL', 'HIGH', 'URGENT'] as TicketPriority[]).map((priority) => (
-                        <button
-                          key={priority}
-                          onClick={() => { setShowMenu(false); handlePriorityChange(priority) }}
-                          className={menuButtonClass}
+                          <button
+                            type="button"
+                            key={priority}
+                            onClick={() => { setShowMenu(false); handlePriorityChange(priority) }}
+                            className={menuButtonClass}
                         >
                           {priorityLabels[priority]}
                         </button>
@@ -524,30 +592,34 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                         Estado
                       </div>
 
-                      <button
-                        onClick={() => { setShowMenu(false); handleStatusChange('OPEN') }}
-                        className={menuButtonClass}
+                        <button
+                          type="button"
+                          onClick={() => { setShowMenu(false); handleStatusChange('OPEN') }}
+                          className={menuButtonClass}
                       >
                         <CircleDot className={menuIconClass} />
                         Marcar como abierto
                       </button>
-                      <button
-                        onClick={() => { setShowMenu(false); handleStatusChange('PENDING') }}
-                        className={menuButtonClass}
+                        <button
+                          type="button"
+                          onClick={() => { setShowMenu(false); handleStatusChange('PENDING') }}
+                          className={menuButtonClass}
                       >
                         <PauseCircle className={menuIconClass} />
                         Marcar como pendiente
                       </button>
-                      <button
-                        onClick={() => { setShowMenu(false); handleStatusChange('SOLVED') }}
-                        className={menuButtonClass}
+                        <button
+                          type="button"
+                          onClick={() => { setShowMenu(false); handleStatusChange('SOLVED') }}
+                          className={menuButtonClass}
                       >
                         <CheckCircle2 className={menuIconClass} />
                         Marcar como resuelto
                       </button>
-                      <button
-                        onClick={() => { setShowMenu(false); handleStatusChange('CLOSED') }}
-                        className={menuButtonClass}
+                        <button
+                          type="button"
+                          onClick={() => { setShowMenu(false); handleStatusChange('CLOSED') }}
+                          className={menuButtonClass}
                       >
                         <Lock className={menuIconClass} />
                         Marcar como cerrado
@@ -560,9 +632,10 @@ export default function TicketHeader({ ticket, isRequester, canDelete, isCoordin
                   )}
 
                   {canDelete && (
-                    <button
-                      onClick={() => { setShowMenu(false); setShowDeleteConfirm(true) }}
-                      className={dangerButtonClass}
+                          <button
+                            type="button"
+                            onClick={() => { setShowMenu(false); setShowDeleteConfirm(true) }}
+                            className={dangerButtonClass}
                     >
                       <Trash2 className="h-4 w-4" />
                       Eliminar ticket
