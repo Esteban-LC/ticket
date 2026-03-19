@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { MessageType, UserRole } from '@prisma/client'
-import { Reply, Pin, PinOff, Trash2, Download, X as XIcon, Video, Mic, SmilePlus, FileBadge2, Search } from 'lucide-react'
+import { Reply, Pin, PinOff, Trash2, Download, X as XIcon, Video, Mic, SmilePlus, FileBadge2, Search, FileText, FileSpreadsheet, FileArchive, FileCode2, Presentation, NotebookText } from 'lucide-react'
 import { isImageAttachment, isRecordedAudioAttachment, isVideoAttachment, parseAttachmentRef } from '@/lib/attachments'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
@@ -150,6 +150,122 @@ function getAttachmentLabel(name: string, mimeType?: string) {
   if (mimeType?.startsWith('video/')) return 'VIDEO'
   if (mimeType?.startsWith('audio/')) return 'AUDIO'
   return 'FILE'
+}
+
+function getAttachmentAppearance(label: string, mimeType?: string) {
+  const normalized = label.toUpperCase()
+
+  if (mimeType?.startsWith('video/')) {
+    return {
+      icon: Video,
+      badgeClass: 'border border-fuchsia-300/20 bg-fuchsia-500/15 text-fuchsia-200',
+      iconClass: 'text-fuchsia-200',
+    }
+  }
+
+  if (mimeType?.startsWith('audio/')) {
+    return {
+      icon: Mic,
+      badgeClass: 'border border-emerald-300/20 bg-emerald-500/15 text-emerald-200',
+      iconClass: 'text-emerald-200',
+    }
+  }
+
+  if (['PDF'].includes(normalized)) {
+    return {
+      icon: FileBadge2,
+      badgeClass: 'border border-rose-300/20 bg-rose-500/15 text-rose-200',
+      iconClass: 'text-rose-200',
+    }
+  }
+
+  if (['XLS', 'XLSX', 'CSV'].includes(normalized)) {
+    return {
+      icon: FileSpreadsheet,
+      badgeClass: 'border border-emerald-300/20 bg-emerald-500/15 text-emerald-200',
+      iconClass: 'text-emerald-200',
+    }
+  }
+
+  if (['DOC', 'DOCX', 'RTF'].includes(normalized)) {
+    return {
+      icon: FileText,
+      badgeClass: 'border border-blue-300/20 bg-blue-500/18 text-blue-100',
+      iconClass: 'text-blue-100',
+    }
+  }
+
+  if (['TXT', 'MD'].includes(normalized)) {
+    return {
+      icon: NotebookText,
+      badgeClass: 'border border-slate-200/15 bg-slate-400/18 text-slate-100',
+      iconClass: 'text-slate-100',
+    }
+  }
+
+  if (['PPT', 'PPTX', 'KEY'].includes(normalized)) {
+    return {
+      icon: Presentation,
+      badgeClass: 'border border-orange-300/20 bg-orange-500/18 text-orange-100',
+      iconClass: 'text-orange-100',
+    }
+  }
+
+  if (['ZIP', 'RAR', '7Z', 'TAR', 'GZ'].includes(normalized)) {
+    return {
+      icon: FileArchive,
+      badgeClass: 'border border-amber-300/20 bg-amber-500/15 text-amber-200',
+      iconClass: 'text-amber-200',
+    }
+  }
+
+  if (['JSON', 'XML', 'JS', 'TS', 'HTML', 'CSS', 'SQL'].includes(normalized)) {
+    return {
+      icon: FileCode2,
+      badgeClass: 'border border-violet-300/20 bg-violet-500/15 text-violet-200',
+      iconClass: 'text-violet-200',
+    }
+  }
+
+  return {
+    icon: FileBadge2,
+    badgeClass: 'border border-slate-300/20 bg-slate-500/15 text-slate-200',
+    iconClass: 'text-slate-100',
+  }
+}
+
+function getAttachmentCardTone(label: string, mimeType: string | undefined, isOwn: boolean) {
+  const normalized = label.toUpperCase()
+
+  if (mimeType?.startsWith('video/')) {
+    return isOwn ? 'bg-[#2a1940]/85' : 'bg-[#241833]/95'
+  }
+  if (mimeType?.startsWith('audio/')) {
+    return isOwn ? 'bg-[#12312e]/85' : 'bg-[#102926]/95'
+  }
+  if (['PDF'].includes(normalized)) {
+    return isOwn ? 'bg-[#3a2230]/85' : 'bg-[#301d29]/95'
+  }
+  if (['XLS', 'XLSX', 'CSV'].includes(normalized)) {
+    return isOwn ? 'bg-[#15362b]/85' : 'bg-[#112c23]/95'
+  }
+  if (['DOC', 'DOCX', 'RTF'].includes(normalized)) {
+    return isOwn ? 'bg-[#1b3050]/85' : 'bg-[#172945]/95'
+  }
+  if (['PPT', 'PPTX', 'KEY'].includes(normalized)) {
+    return isOwn ? 'bg-[#442717]/85' : 'bg-[#382113]/95'
+  }
+  if (['TXT', 'MD'].includes(normalized)) {
+    return isOwn ? 'bg-[#2d3440]/85' : 'bg-[#252b35]/95'
+  }
+  if (['ZIP', 'RAR', '7Z', 'TAR', 'GZ'].includes(normalized)) {
+    return isOwn ? 'bg-[#43320f]/85' : 'bg-[#38290d]/95'
+  }
+  if (['JSON', 'XML', 'JS', 'TS', 'HTML', 'CSS', 'SQL'].includes(normalized)) {
+    return isOwn ? 'bg-[#30244d]/85' : 'bg-[#281f40]/95'
+  }
+
+  return isOwn ? 'bg-black/20' : 'bg-[#111b21]/95 dark:bg-[#111b21]/95'
 }
 
 interface ReplyTo {
@@ -608,15 +724,11 @@ export default function MessageList({
   const renderAttachments = (attachments: string[], isOwn: boolean) => {
     if (!attachments.length) return null
 
-    const fileCardClass = isOwn
-      ? 'border-white/10 bg-black/20 text-white'
-      : 'border-gray-200 bg-[#111b21]/95 text-white dark:border-slate-600 dark:bg-[#111b21]/95'
-
     const fileMetaClass = isOwn ? 'text-white/65' : 'text-slate-300'
     const fileIconClass = isOwn ? 'bg-white/10 text-white' : 'bg-white/10 text-slate-100'
     const fileDownloadClass = isOwn
-      ? 'border-white/15 text-white/80 hover:bg-white/10 hover:text-white'
-      : 'border-white/15 text-slate-200 hover:bg-white/10 hover:text-white'
+      ? 'text-white/80 hover:bg-white/10 hover:text-white'
+      : 'text-slate-200 hover:bg-white/10 hover:text-white'
 
     return (
       <div className="mt-1.5 space-y-2 max-w-full">
@@ -627,32 +739,34 @@ export default function MessageList({
           const attachmentKey = `${attachment.fileId || attachment.url}-${index}`
           const fileSize = formatFileSize(attachment.size)
           const attachmentLabel = getAttachmentLabel(attachment.name, attachment.mimeType)
+          const attachmentAppearance = getAttachmentAppearance(attachmentLabel, attachment.mimeType)
+          const fileCardClass = `${getAttachmentCardTone(attachmentLabel, attachment.mimeType, isOwn)} text-white`
+          const AttachmentIcon = attachmentAppearance.icon
 
           const fileCard = (
             <a
               href={downloadUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`flex w-full max-w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-xs ${fileCardClass}`}
+              className={`group flex w-full max-w-full min-w-0 items-center gap-3 rounded-2xl px-3 py-3 text-xs shadow-none ring-0 outline-none ${fileCardClass}`}
               onClick={e => e.stopPropagation()}
             >
-              <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg ${fileIconClass}`}>
-                {attachment.mimeType?.startsWith('video/') ? (
-                  <Video className="h-5 w-5" />
-                ) : attachment.mimeType?.startsWith('audio/') ? (
-                  <Mic className="h-5 w-5" />
-                ) : (
-                  <FileBadge2 className="h-5 w-5" />
-                )}
+              <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-white/5 ${fileIconClass}`}>
+                <AttachmentIcon className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1 overflow-hidden">
-                <p className="truncate text-sm font-medium leading-tight">{attachment.name}</p>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex flex-shrink-0 items-center rounded-md px-2 py-1 text-[10px] font-semibold tracking-[0.12em] uppercase ${attachmentAppearance.badgeClass}`}>
+                    {attachmentLabel}
+                  </span>
+                </div>
+                <p className="mt-2 truncate text-sm font-semibold leading-tight">{attachment.name}</p>
                 <div className={`mt-1 flex items-center gap-2 text-[11px] ${fileMetaClass}`}>
-                  <span>{attachmentLabel}</span>
                   {fileSize && <span>{fileSize}</span>}
+                  {!fileSize && <span>Archivo adjunto</span>}
                 </div>
               </div>
-              <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border ${fileDownloadClass}`}>
+              <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-transform group-hover:scale-105 ${fileDownloadClass}`}>
                 <Download className="h-4 w-4" />
               </div>
             </a>
@@ -694,7 +808,7 @@ export default function MessageList({
             if (isRecordedAudioAttachment(attachment)) {
               return (
                 <div key={index} className="w-full max-w-full sm:max-w-[360px]">
-                  <div className={`w-full min-w-[260px] max-w-full rounded-xl border px-3 py-3 sm:min-w-[320px] ${fileCardClass}`}>
+                  <div className={`w-full min-w-[260px] max-w-full rounded-xl px-3 py-3 sm:min-w-[320px] ${fileCardClass}`}>
                     <audio controls preload="metadata" className="block h-10 w-full min-w-0 max-w-full">
                       <source src={previewUrl} type={attachment.mimeType || 'audio/mpeg'} />
                       Tu navegador no puede reproducir este audio.
@@ -706,7 +820,7 @@ export default function MessageList({
 
             return (
               <div key={index} className="max-w-full sm:max-w-[360px]">
-                <div className={`rounded-xl border px-3 py-3 ${fileCardClass}`}>
+                <div className={`rounded-xl px-3 py-3 ${fileCardClass}`}>
                   <div className="flex items-center gap-2">
                     <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${fileIconClass}`}>
                       <Mic className="h-5 w-5" />

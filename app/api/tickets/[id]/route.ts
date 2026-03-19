@@ -113,7 +113,16 @@ export async function PATCH(
     // Obtener usuario con su rol
     const user = await prisma.user.findUnique({
       where: { email: session.user.email || '' },
-      select: { id: true, role: true }
+      select: {
+        id: true,
+        role: true,
+        permissions: true,
+        department: {
+          select: {
+            isAdmin: true
+          }
+        }
+      }
     })
 
     if (!user) {
@@ -139,11 +148,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Sin campos válidos para actualizar' }, { status: 400 })
     }
 
+    const canManageAssignments =
+      user.role === 'ADMIN' ||
+      user.role === 'COORDINATOR' ||
+      user.permissions.includes('tickets:coordinator')
+
     // Solo COORDINATOR+ puede cambiar estado o asignado
     if (
       (data.status !== undefined || data.assigneeId !== undefined) &&
-      user.role !== 'ADMIN' &&
-      user.role !== 'COORDINATOR'
+      !canManageAssignments
     ) {
       // Permitir a EDITOR/VIEWER cerrar su propio ticket
       const ticketOwner = await prisma.ticket.findUnique({
@@ -155,7 +168,12 @@ export async function PATCH(
         data.status === 'CLOSED' &&
         Object.keys(data).length === 1
 
-      if (!isClosingOwnTicket) {
+      const isTakingTicketAsAdminDept =
+        user.department?.isAdmin === true &&
+        data.assigneeId === user.id &&
+        Object.keys(data).length === 1
+
+      if (!isClosingOwnTicket && !isTakingTicketAsAdminDept) {
         return NextResponse.json({ error: 'No autorizado para esta acción' }, { status: 403 })
       }
     }

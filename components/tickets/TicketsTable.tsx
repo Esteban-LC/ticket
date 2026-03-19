@@ -39,13 +39,9 @@ interface Ticket {
 
 interface TicketsTableProps {
   tickets: Ticket[]
-  agents: Array<{
-    id: string
-    name: string | null
-    email: string
-  }>
   currentUserId: string
   canDelete?: boolean
+  canSelfAssign?: boolean
 }
 
 const statusColors = {
@@ -82,10 +78,11 @@ const typeLabels: Record<string, string> = {
   PROJECT: 'Proyecto',
 }
 
-export default function TicketsTable({ tickets, agents, currentUserId, canDelete }: TicketsTableProps) {
+export default function TicketsTable({ tickets, currentUserId, canDelete, canSelfAssign }: TicketsTableProps) {
   const router = useRouter()
   const [confirmTicket, setConfirmTicket] = useState<Ticket | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [assigningTicketId, setAssigningTicketId] = useState<string | null>(null)
   const getTicketIdentifier = (ticket: Ticket) => ticket.ticketCode || `#${ticket.number}`
 
   const handleDeleteClick = (e: React.MouseEvent, ticket: Ticket) => {
@@ -106,6 +103,31 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
     } finally {
       setDeleting(false)
       setConfirmTicket(null)
+    }
+  }
+
+  const handleAssignToMe = async (e: React.MouseEvent, ticketId: string) => {
+    e.stopPropagation()
+    setAssigningTicketId(ticketId)
+
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          assigneeId: currentUserId,
+        }),
+      })
+
+      if (res.ok) {
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error assigning ticket:', error)
+    } finally {
+      setAssigningTicketId(null)
     }
   }
 
@@ -181,13 +203,23 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
                 </span>
               </div>
 
-              {ticket.assignee && (
-                <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
+              <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
+                {ticket.assignee ? (
                   <span className="text-gray-500 dark:text-gray-500 text-xs">
-                    Asignado a: <span className="text-gray-700 dark:text-gray-300 font-medium">{ticket.assignee.name}</span>
+                    Asignado a: <span className="text-gray-700 dark:text-gray-300 font-medium">{ticket.assignee.name || ticket.assignee.email}</span>
                   </span>
-                </div>
-              )}
+                ) : canSelfAssign ? (
+                  <button
+                    onClick={(e) => handleAssignToMe(e, ticket.id)}
+                    disabled={assigningTicketId === ticket.id}
+                    className="px-3 py-1 text-xs font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 dark:bg-primary-900/20 dark:text-primary-300 dark:hover:bg-primary-900/30 rounded-md transition disabled:opacity-50"
+                  >
+                    {assigningTicketId === ticket.id ? 'Asignando...' : 'Asignarmelo'}
+                  </button>
+                ) : (
+                  <span className="text-gray-500 dark:text-gray-500 text-xs">Sin asignar</span>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -278,7 +310,19 @@ export default function TicketsTable({ tickets, agents, currentUserId, canDelete
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {ticket.assignee?.name || 'Sin asignar'}
+                    {ticket.assignee ? (
+                      ticket.assignee.name || ticket.assignee.email
+                    ) : canSelfAssign ? (
+                      <button
+                        onClick={(e) => handleAssignToMe(e, ticket.id)}
+                        disabled={assigningTicketId === ticket.id}
+                        className="px-3 py-1 text-xs font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 dark:bg-primary-900/20 dark:text-primary-300 dark:hover:bg-primary-900/30 rounded-md transition disabled:opacity-50"
+                      >
+                        {assigningTicketId === ticket.id ? 'Asignando...' : 'Asignarmelo'}
+                      </button>
+                    ) : (
+                      'Sin asignar'
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {format(new Date(ticket.updatedAt), 'PPp', { locale: es })}

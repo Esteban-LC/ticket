@@ -31,7 +31,18 @@ export default async function TicketsPage({
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true, permissions: true }
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      permissions: true,
+      department: {
+        select: {
+          isAdmin: true
+        }
+      }
+    }
   })
 
   if (!user) {
@@ -114,7 +125,7 @@ export default async function TicketsPage({
     }
   }
 
-  const [tickets, totalCount, agents, openTicketsCount] = await Promise.all([
+  const [tickets, totalCount, openTicketsCount] = await Promise.all([
     prisma.ticket.findMany({
       where: whereClause,
       include: {
@@ -152,11 +163,6 @@ export default async function TicketsPage({
       take: perPage,
     }),
     prisma.ticket.count({ where: whereClause }),
-    prisma.user.findMany({
-      where: { deletedAt: null, department: { isAdmin: true } },
-      select: { id: true, name: true, email: true },
-      orderBy: { name: 'asc' },
-    }),
     // Filtrar contador según el rol
     prisma.ticket.count({
       where: user.role === 'EDITOR' || user.role === 'VIEWER'
@@ -166,6 +172,13 @@ export default async function TicketsPage({
         : { status: 'OPEN' }
     })
   ])
+
+  const canDelete = user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')
+  const canSelfAssign =
+    user.role === 'ADMIN' ||
+    user.role === 'COORDINATOR' ||
+    user.permissions.includes('tickets:coordinator') ||
+    user.department?.isAdmin === true
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950">
@@ -193,9 +206,9 @@ export default async function TicketsPage({
 
             <TicketsTable
               tickets={tickets}
-              agents={agents}
-              currentUserId={session.user.id}
-              canDelete={user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')}
+              currentUserId={user.id}
+              canDelete={canDelete}
+              canSelfAssign={canSelfAssign}
             />
 
             <Pagination
