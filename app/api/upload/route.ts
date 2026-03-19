@@ -65,6 +65,7 @@ async function storeTicketAttachmentLocally(params: {
   fileName: string
   mimeType: string
   sourceKind: 'recording' | 'upload'
+  displayInline: boolean
 }) {
   const ticketDir = path.join(LOCAL_UPLOAD_DIR, params.ticketId)
   await mkdir(ticketDir, { recursive: true })
@@ -90,8 +91,9 @@ async function storeTicketAttachmentLocally(params: {
   return {
     provider: 'local' as const,
     sourceKind: params.sourceKind,
+    displayInline: params.displayInline,
     url: publicUrl,
-    previewUrl: publicUrl,
+    previewUrl: params.displayInline ? publicUrl : undefined,
     downloadUrl: publicUrl,
     name: storedName,
     mimeType: preparedFile.mimeType,
@@ -147,6 +149,7 @@ export async function POST(request: Request) {
     const file = formData.get('file') as File | null
     const ticketId = String(formData.get('ticketId') || '')
     const attachmentKind = formData.get('attachmentKind') === 'recording' ? 'recording' : 'upload'
+    const displayInline = formData.get('displayInline') === 'true'
 
     if (!ticketId) {
       return NextResponse.json({ error: 'ticketId es requerido' }, { status: 400 })
@@ -173,6 +176,7 @@ export async function POST(request: Request) {
       fileName: file.name,
       mimeType: file.type || 'application/octet-stream',
       sourceKind: attachmentKind,
+      displayInline,
     })
 
     return NextResponse.json({

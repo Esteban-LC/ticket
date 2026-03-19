@@ -742,6 +742,7 @@ export default function MessageList({
           const attachmentAppearance = getAttachmentAppearance(attachmentLabel, attachment.mimeType)
           const fileCardClass = `${getAttachmentCardTone(attachmentLabel, attachment.mimeType, isOwn)} text-white`
           const AttachmentIcon = attachmentAppearance.icon
+          const shouldRenderInlineImage = attachment.displayInline !== false && isImageAttachment(attachment) && !failedImages[attachmentKey]
 
           const fileCard = (
             <a
@@ -772,7 +773,7 @@ export default function MessageList({
             </a>
           )
 
-          if (isImageAttachment(attachment) && !failedImages[attachmentKey]) {
+          if (shouldRenderInlineImage) {
             return (
               <div key={index} className="max-w-full sm:max-w-[280px]">
                 <div

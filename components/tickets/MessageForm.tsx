@@ -23,6 +23,7 @@ interface PendingAttachment {
   file: File
   previewUrl?: string
   sourceKind?: 'recording' | 'upload'
+  displayInline?: boolean
 }
 
 const EMOJI_GROUPS = [
@@ -152,15 +153,25 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
     }, 0)
   }
 
-  const addAttachmentFile = useCallback((file: File, sourceKind: 'recording' | 'upload' = 'upload') => {
+  const addAttachmentFile = useCallback((
+    file: File,
+    options?: {
+      sourceKind?: 'recording' | 'upload'
+      displayInline?: boolean
+    }
+  ) => {
     const id = Math.random().toString(36).slice(2)
-    const previewUrl = isImageFile(file) || isVideoFile(file) || isAudioFile(file) ? URL.createObjectURL(file) : undefined
-    setPendingAttachments(prev => [...prev, { id, file, previewUrl, sourceKind }])
+    const sourceKind = options?.sourceKind || 'upload'
+    const displayInline = options?.displayInline ?? (isImageFile(file) || isVideoFile(file) || isAudioFile(file))
+    const previewUrl = displayInline && (isImageFile(file) || isVideoFile(file) || isAudioFile(file))
+      ? URL.createObjectURL(file)
+      : undefined
+    setPendingAttachments(prev => [...prev, { id, file, previewUrl, sourceKind, displayInline }])
   }, [])
 
   const handleAttachmentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    files.forEach((file) => addAttachmentFile(file, 'upload'))
+    files.forEach((file) => addAttachmentFile(file, { sourceKind: 'upload', displayInline: false }))
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -170,7 +181,7 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
     if (!imageItem) return
     e.preventDefault()
     const file = imageItem.getAsFile()
-    if (file) addAttachmentFile(file)
+    if (file) addAttachmentFile(file, { sourceKind: 'upload', displayInline: true })
   }, [addAttachmentFile])
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -194,7 +205,10 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
     dragCounterRef.current = 0
     setIsDragging(false)
     const files = Array.from(e.dataTransfer.files)
-    files.forEach((file) => addAttachmentFile(file, 'upload'))
+    files.forEach((file) => addAttachmentFile(file, {
+      sourceKind: 'upload',
+      displayInline: isImageFile(file),
+    }))
   }, [addAttachmentFile])
 
   const stopMediaStream = () => {
@@ -238,7 +252,7 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
           type: blobType,
         })
 
-        addAttachmentFile(file, 'recording')
+        addAttachmentFile(file, { sourceKind: 'recording', displayInline: true })
         stopMediaStream()
       }
 
@@ -286,6 +300,7 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
         formData.append('file', attachment.file)
         formData.append('ticketId', ticketId)
         formData.append('attachmentKind', attachment.sourceKind || 'upload')
+        formData.append('displayInline', attachment.displayInline ? 'true' : 'false')
 
         const response = await fetch('/api/upload', {
           method: 'POST',

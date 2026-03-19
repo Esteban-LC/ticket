@@ -1,6 +1,7 @@
 export interface AttachmentRef {
   provider: 'google-drive' | 'local' | 'legacy'
   sourceKind?: 'recording' | 'upload'
+  displayInline?: boolean
   url: string
   downloadUrl?: string
   previewUrl?: string
@@ -44,6 +45,7 @@ export function parseAttachmentRef(value: string): AttachmentRef {
             : parsed.sourceKind === 'upload'
               ? 'upload'
               : undefined,
+        displayInline: typeof parsed.displayInline === 'boolean' ? parsed.displayInline : undefined,
         url: parsed.url,
         downloadUrl: typeof parsed.downloadUrl === 'string' ? parsed.downloadUrl : undefined,
         previewUrl: typeof parsed.previewUrl === 'string' ? parsed.previewUrl : undefined,
@@ -63,6 +65,7 @@ export function parseAttachmentRef(value: string): AttachmentRef {
   return {
     provider: 'legacy',
     sourceKind: 'upload',
+    displayInline: true,
     url: value,
     previewUrl: value,
     downloadUrl: value,
