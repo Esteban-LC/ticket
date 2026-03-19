@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { MessageType, UserRole } from '@prisma/client'
@@ -412,6 +412,10 @@ export default function MessageList({
       // Ignore malformed local storage values.
     }
   }, [])
+
+  useLayoutEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+  }, [ticketId])
 
   useEffect(() => {
     if (messages.length > prevLengthRef.current) {
