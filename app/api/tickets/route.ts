@@ -5,6 +5,14 @@ import { prisma } from '@/lib/prisma'
 import { sendEmail, getTicketCreatedEmailTemplate } from '@/lib/email'
 import { generateTicketCode } from '@/lib/ticket-code'
 
+function sendEmailInBackground(payload: Parameters<typeof sendEmail>[0]) {
+  setTimeout(() => {
+    sendEmail(payload).catch((error) => {
+      console.error('Background email failed:', error)
+    })
+  }, 0)
+}
+
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -118,9 +126,6 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { subject, description, priority, type, typeOther, requestedBy, requesterArea, requesterResponsible, categoryId, hours, tags, customerId, attachments } = body
 
-    console.log('Session:', session)
-    console.log('CustomerId from body:', customerId)
-
     // Si no hay sesión pero hay customerId (desde formulario público)
     if (!session && !customerId) {
       return NextResponse.json(
@@ -138,8 +143,6 @@ export async function POST(request: Request) {
 
     // Usar customerId si se proporciona, sino usar el ID del usuario de la sesión
     const finalCustomerId = customerId || session?.user?.id
-
-    console.log('Final customerId:', finalCustomerId)
 
     if (!finalCustomerId) {
       return NextResponse.json(
@@ -162,7 +165,6 @@ export async function POST(request: Request) {
     })
 
     if (!userExists) {
-      console.error('Usuario no encontrado:', finalCustomerId)
       return NextResponse.json(
         { error: 'Usuario no encontrado en la base de datos' },
         { status: 400 }
@@ -198,8 +200,6 @@ export async function POST(request: Request) {
       ticketData.hours = parseFloat(hours)
     }
 
-    console.log('Ticket data:', ticketData)
-
     const ticket = await prisma.$transaction(async (tx) => {
       const ticketCode = await generateTicketCode(tx, {
         area: requesterArea || userExists.department?.name || null,
@@ -233,7 +233,7 @@ export async function POST(request: Request) {
         description: ticket.description || '',
       })
 
-      await sendEmail({
+      sendEmailInBackground({
         to: ticket.customer.email,
         subject: emailTemplate.subject,
         html: emailTemplate.html,

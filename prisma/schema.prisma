@@ -50,6 +50,7 @@ model User {
   adminLogs          AdminLog[]
   events             Event[]
   interactions       Interaction[]
+  messageReactions   MessageReaction[]
   messages           Message[]
   assignedTickets    Ticket[]      @relation("AssignedTickets")
   createdTickets     Ticket[]      @relation("CreatedTickets")
@@ -146,10 +147,26 @@ model Message {
   ticket      Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   replyTo     Message?    @relation("MessageReplies", fields: [replyToId], references: [id])
   replies     Message[]   @relation("MessageReplies")
+  reactions   MessageReaction[]
 
   @@index([ticketId])
   @@index([authorId])
   @@index([createdAt])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
 }
 
 model Interaction {

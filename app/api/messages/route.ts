@@ -5,6 +5,14 @@ import { prisma } from '@/lib/prisma'
 import { sendEmail, getTicketReplyEmailTemplate } from '@/lib/email'
 import { ticketEmitter } from '@/lib/sseEmitter'
 
+function sendEmailInBackground(payload: Parameters<typeof sendEmail>[0]) {
+  setTimeout(() => {
+    sendEmail(payload).catch((error) => {
+      console.error('Background email failed:', error)
+    })
+  }, 0)
+}
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -54,6 +62,20 @@ export async function POST(request: Request) {
             }
           }
         },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'asc'
+          }
+        },
         ticket: {
           include: {
             customer: {
@@ -90,7 +112,7 @@ export async function POST(request: Request) {
         agentName: message.author.name || message.author.email,
       })
 
-      await sendEmail({
+      sendEmailInBackground({
         to: message.ticket.customer.email,
         subject: emailTemplate.subject,
         html: emailTemplate.html,
@@ -120,6 +142,10 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('ticketId')
+    // `before` = ID del mensaje más antiguo que el cliente ya tiene (para cargar anteriores)
+    const before = searchParams.get('before')
+    const limitParam = searchParams.get('limit')
+    const limit = Math.min(parseInt(limitParam || '50', 10), 100)
 
     if (!ticketId) {
       return NextResponse.json(
@@ -128,34 +154,75 @@ export async function GET(request: Request) {
       )
     }
 
-    const messages = await prisma.message.findMany({
-      where: { ticketId },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-            role: true,
-          }
-        },
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            author: {
-              select: { id: true, name: true, email: true }
-            }
+    const messageInclude = {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+          role: true,
+        }
+      },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          author: {
+            select: { id: true, name: true, email: true }
           }
         }
       },
-      orderBy: {
-        createdAt: 'asc'
+      reactions: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'asc' as const
+        }
       }
+    }
+
+    if (before) {
+      // Cargar mensajes anteriores al cursor dado (más antiguos)
+      const pivot = await prisma.message.findUnique({
+        where: { id: before },
+        select: { createdAt: true }
+      })
+      if (!pivot) {
+        return NextResponse.json({ messages: [], hasMore: false })
+      }
+
+      const older = await prisma.message.findMany({
+        where: { ticketId, createdAt: { lt: pivot.createdAt } },
+        include: messageInclude,
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+      })
+
+      const hasMore = older.length > limit
+      const page = hasMore ? older.slice(0, limit) : older
+      // Devolver en orden cronológico ascendente
+      return NextResponse.json({ messages: page.reverse(), hasMore })
+    }
+
+    // Sin cursor: devolver los últimos N mensajes en orden ascendente
+    const newest = await prisma.message.findMany({
+      where: { ticketId },
+      include: messageInclude,
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
     })
 
-    return NextResponse.json(messages)
+    const hasMore = newest.length > limit
+    const page = hasMore ? newest.slice(0, limit) : newest
+    return NextResponse.json({ messages: page.reverse(), hasMore })
   } catch (error) {
     console.error('Error fetching messages:', error)
     return NextResponse.json(

@@ -3,8 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
-import TicketHeader from '@/components/tickets/TicketHeader'
-import TicketBody from '@/components/tickets/TicketBody'
+import TicketDetailClient from '@/components/tickets/TicketDetailClient'
 
 export default async function TicketDetailPage({
   params,
@@ -65,11 +64,39 @@ export default async function TicketDetailPage({
               avatar: true,
               role: true,
             }
+          },
+          replyTo: {
+            select: {
+              id: true,
+              content: true,
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                }
+              }
+            }
+          },
+          reactions: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                }
+              }
+            },
+            orderBy: {
+              createdAt: 'asc'
+            }
           }
         },
         orderBy: {
-          createdAt: 'asc'
-        }
+          createdAt: 'desc'
+        },
+        take: 51,
       },
       interactions: {
         include: {
@@ -96,6 +123,10 @@ export default async function TicketDetailPage({
     redirect('/dashboard')
   }
 
+  const hasMoreMessages = ticket.messages.length > 50
+  // Reordenar a ascendente (tomamos hasta 50, descartamos el extra)
+  const initialMessages = ticket.messages.slice(0, 50).reverse()
+
   // Filtrar contador según el rol
   const countWhere = (user.role === 'EDITOR' || user.role === 'VIEWER')
     ? { status: 'OPEN' as const, customerId: user.id }
@@ -110,18 +141,20 @@ export default async function TicketDetailPage({
   const canDelete = user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-slate-900">
+    <div className="flex h-[100svh] bg-gray-50 dark:bg-slate-900 md:h-screen">
       <Sidebar user={user} openTicketsCount={openTicketsCount} />
 
-      <main className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <TicketHeader ticket={ticket} isRequester={isRequester} canDelete={canDelete} isCoordinator={isCoordinator} isAdminDept={isAdminDept} currentUserId={user.id} />
-
-        <TicketBody
+      <main className="flex-1 min-w-0 min-h-0 grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+        <TicketDetailClient
           ticket={ticket}
-          messages={ticket.messages}
-          currentUserId={session.user.id}
+          messages={initialMessages}
+          initialHasMoreMessages={hasMoreMessages}
+          currentUserId={user.id}
           interactions={ticket.interactions}
           isRequester={isRequester}
+          canDelete={canDelete}
+          isCoordinator={isCoordinator}
+          isAdminDept={isAdminDept}
         />
       </main>
     </div>

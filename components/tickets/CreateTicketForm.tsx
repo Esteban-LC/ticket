@@ -102,16 +102,38 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
     setAttachments(prev => prev.filter((_, i) => i !== index))
   }
 
-  const uploadFiles = async (files: File[]): Promise<string[]> => {
-    const uploadedUrls: string[] = []
+  const uploadFiles = async (files: File[], ticketId: string): Promise<{ uploaded: string[]; failed: string[] }> => {
+    const uploaded: string[] = []
+    const failed: string[] = []
+
     for (const file of files) {
       try {
-        uploadedUrls.push(file.name)
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('ticketId', ticketId)
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error(`No se pudo subir ${file.name}`)
+        }
+
+        const data = await response.json()
+        if (typeof data.serializedAttachment === 'string') {
+          uploaded.push(data.serializedAttachment)
+        } else {
+          throw new Error(`Respuesta invalida al subir ${file.name}`)
+        }
       } catch (error) {
         console.error('Error uploading file:', error)
+        failed.push(file.name)
       }
     }
-    return uploadedUrls
+
+    return { uploaded, failed }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -120,8 +142,6 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
     setError('')
 
     try {
-      const attachmentUrls = await uploadFiles(attachments)
-
       const response = await fetch('/api/tickets', {
         method: 'POST',
         headers: {
@@ -132,12 +152,33 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
           type: formData.type || null,
           typeOther: formData.type === 'OTHER' ? formData.typeOther : null,
           tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-          attachments: attachmentUrls
+          attachments: []
         }),
       })
 
       if (response.ok) {
         const ticket = await response.json()
+
+        if (attachments.length > 0) {
+          const { uploaded, failed } = await uploadFiles(attachments, ticket.id)
+
+          if (uploaded.length > 0) {
+            await fetch(`/api/tickets/${ticket.id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                attachments: uploaded,
+              }),
+            })
+          }
+
+          if (failed.length > 0) {
+            alert(`El ticket se creo, pero no se pudieron subir estos archivos: ${failed.join(', ')}`)
+          }
+        }
+
         router.push(`/dashboard/tickets/${ticket.id}`)
       } else {
         setError('Error al crear el ticket')
@@ -462,7 +503,7 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
                   onChange={handleFileChange}
                   className="hidden"
                   id="file-upload"
-                  accept="image/*,.pdf,.doc,.docx,.txt"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
                 />
                 <label
                   htmlFor="file-upload"

@@ -1,7 +1,5 @@
 'use client'
-
-import { useState } from 'react'
-import { MessageSquare, Info } from 'lucide-react'
+import { Info, X } from 'lucide-react'
 import TicketConversation from './TicketConversation'
 import TicketSidebar from './TicketSidebar'
 import { InteractionType, TicketType } from '@prisma/client'
@@ -10,6 +8,7 @@ interface TicketBodyProps {
   ticket: {
     id: string
     description: string | null
+    attachments?: string[]
     createdAt: Date
     updatedAt: Date
     status: string
@@ -30,6 +29,7 @@ interface TicketBodyProps {
     tags: string[]
   }
   messages: any[]
+  initialHasMoreMessages?: boolean
   currentUserId: string
   interactions: Array<{
     id: string
@@ -39,69 +39,66 @@ interface TicketBodyProps {
     user: { id: string; name: string | null }
   }>
   isRequester: boolean
+  detailsOpen: boolean
+  onOpenDetails: () => void
+  onCloseDetails: () => void
 }
 
 export default function TicketBody({
   ticket,
   messages,
+  initialHasMoreMessages,
   currentUserId,
   interactions,
   isRequester,
+  detailsOpen,
+  onOpenDetails,
+  onCloseDetails,
 }: TicketBodyProps) {
-  const [activeTab, setActiveTab] = useState<'conversation' | 'details'>('conversation')
-
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-      {/* Mobile tab bar */}
-      <div className="flex lg:hidden shrink-0 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <button
-          onClick={() => setActiveTab('conversation')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'conversation'
-              ? 'border-primary-600 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <MessageSquare className="h-4 w-4" />
-          Conversación
-        </button>
-        <button
-          onClick={() => setActiveTab('details')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'details'
-              ? 'border-primary-600 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <Info className="h-4 w-4" />
-          Detalles
-        </button>
+    <div className="relative flex-1 min-h-0 overflow-hidden">
+      <div className="h-full min-h-0">
+        <TicketConversation
+          ticket={ticket}
+          messages={messages}
+          initialHasMoreMessages={initialHasMoreMessages}
+          currentUserId={currentUserId}
+          pinnedMessageId={ticket.pinnedMessageId}
+        />
       </div>
 
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Conversation panel */}
-        <div className={`flex-1 flex flex-col overflow-hidden min-h-0 ${activeTab !== 'conversation' ? 'hidden lg:flex' : 'flex'}`}>
-          <TicketConversation
-            ticket={ticket}
-            messages={messages}
-            currentUserId={currentUserId}
-            pinnedMessageId={ticket.pinnedMessageId}
-          />
-        </div>
+      {detailsOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm"
+          onClick={onCloseDetails}
+        >
+          <div
+            className="absolute inset-y-0 right-0 w-full sm:w-[24rem] lg:w-[28rem] bg-gray-50 dark:bg-slate-800 shadow-2xl flex flex-col border-l border-gray-200 dark:border-slate-700"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary-500" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Detalles del ticket</h3>
+              </div>
+              <button
+                onClick={onCloseDetails}
+                className="p-2 rounded-full text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-        {/* Sidebar panel */}
-        <div className={`overflow-y-auto bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 ${
-          activeTab !== 'details'
-            ? 'hidden lg:block lg:w-80 lg:shrink-0 lg:border-l'
-            : 'flex-1'
-        }`}>
-          <TicketSidebar
-            ticket={ticket}
-            interactions={interactions}
-            isRequester={isRequester}
-          />
+            <div className="flex-1 overflow-y-auto">
+              <TicketSidebar
+                ticket={ticket}
+                interactions={interactions}
+                isRequester={isRequester}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
