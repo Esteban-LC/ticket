@@ -1,8 +1,8 @@
 'use client'
 
 import { AlertTriangle, CheckCircle, Info, XCircle, Loader2 } from 'lucide-react'
-import Modal from './Modal'
 import { useEffect, useState } from 'react'
+import Modal from './Modal'
 
 interface ActionDialogProps {
   isOpen: boolean
@@ -15,6 +15,10 @@ interface ActionDialogProps {
   variant?: 'danger' | 'warning' | 'info' | 'success'
   successMessage?: string
   loadingMessage?: string
+  requireTextConfirmation?: boolean
+  confirmationText?: string
+  confirmationLabel?: string
+  confirmationPlaceholder?: string
 }
 
 type DialogState = 'confirm' | 'loading' | 'success' | 'error'
@@ -28,17 +32,22 @@ export default function ActionDialog({
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   variant = 'info',
-  successMessage = 'Acción completada exitosamente',
+  successMessage = 'Accion completada exitosamente',
   loadingMessage = 'Procesando...',
+  requireTextConfirmation = false,
+  confirmationText = 'CONFIRMAR',
+  confirmationLabel,
+  confirmationPlaceholder,
 }: ActionDialogProps) {
   const [state, setState] = useState<DialogState>('confirm')
   const [errorMessage, setErrorMessage] = useState('')
+  const [confirmationValue, setConfirmationValue] = useState('')
 
-  // Reset state when dialog opens
   useEffect(() => {
     if (isOpen) {
       setState('confirm')
       setErrorMessage('')
+      setConfirmationValue('')
     }
   }, [isOpen])
 
@@ -47,17 +56,11 @@ export default function ActionDialog({
     try {
       await onConfirm()
       setState('success')
-      // Auto-close after showing success
-      setTimeout(() => {
-        onClose()
-      }, 1500)
+      setTimeout(() => onClose(), 1500)
     } catch (error: any) {
       setState('error')
-      setErrorMessage(error.message || 'Ocurrió un error')
-      // Auto-close after showing error
-      setTimeout(() => {
-        onClose()
-      }, 2000)
+      setErrorMessage(error.message || 'Ocurrio un error')
+      setTimeout(() => onClose(), 2000)
     }
   }
 
@@ -90,11 +93,13 @@ export default function ActionDialog({
 
   const config = variantConfig[variant]
   const Icon = config.icon
+  const normalizedInput = confirmationValue.trim().toUpperCase()
+  const normalizedExpected = confirmationText.trim().toUpperCase()
+  const isTextConfirmationValid = !requireTextConfirmation || normalizedInput === normalizedExpected
 
-  // Render según el estado
   if (state === 'loading') {
     return (
-      <Modal isOpen={isOpen} onClose={() => {}} title={title} size="sm">
+      <Modal isOpen={isOpen} onClose={() => { }} title={title} size="sm">
         <div className="py-8">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-12 w-12 text-blue-600 dark:text-blue-400 animate-spin" />
@@ -109,7 +114,7 @@ export default function ActionDialog({
 
   if (state === 'success') {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="¡Éxito!" size="sm">
+      <Modal isOpen={isOpen} onClose={onClose} title="Exito" size="sm">
         <div className="py-8">
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
@@ -144,7 +149,6 @@ export default function ActionDialog({
     )
   }
 
-  // Estado de confirmación (default)
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <div className="space-y-4">
@@ -157,6 +161,22 @@ export default function ActionDialog({
           </p>
         </div>
 
+        {requireTextConfirmation && (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {confirmationLabel || `Escribe ${confirmationText} para continuar.`}
+            </p>
+            <input
+              type="text"
+              value={confirmationValue}
+              onChange={(e) => setConfirmationValue(e.target.value)}
+              placeholder={confirmationPlaceholder || confirmationText}
+              autoComplete="off"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            />
+          </div>
+        )}
+
         <div className="flex gap-3 justify-end pt-4">
           <button
             onClick={onClose}
@@ -166,7 +186,8 @@ export default function ActionDialog({
           </button>
           <button
             onClick={handleConfirm}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${config.buttonColor}`}
+            disabled={!isTextConfirmationValid}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${config.buttonColor} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {confirmText}
           </button>

@@ -18,9 +18,10 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const user = await prisma.user.findUnique({
+        const user = await prisma.user.findFirst({
           where: {
-            email: credentials.email
+            email: credentials.email,
+            deletedAt: null,
           }
         })
 
@@ -61,6 +62,27 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role
         token.permissions = (user as any).permissions || []
       }
+
+      if (token.email) {
+        const currentUser = await prisma.user.findFirst({
+          where: {
+            email: token.email,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            role: true,
+            permissions: true,
+          },
+        })
+
+        if (currentUser) {
+          token.id = currentUser.id
+          token.role = currentUser.role
+          token.permissions = currentUser.permissions || []
+        }
+      }
+
       return token
     },
     async session({ session, token }) {

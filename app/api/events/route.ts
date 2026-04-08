@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 // Schema de validación para eventos
 const eventSchema = z.object({
@@ -159,6 +163,8 @@ export async function POST(request: NextRequest) {
                 }
             }
         })
+
+        emitResourceEvent('events', { action: 'created', id: event.id })
 
         return NextResponse.json(event, { status: 201 })
     } catch (error) {

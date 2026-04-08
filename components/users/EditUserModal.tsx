@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { X, Shield, KeyRound } from 'lucide-react'
+import { isPermissionEffectivelyChecked, USER_PERMISSION_GROUPS } from '@/lib/permissions'
 
 interface Department {
   id: string
@@ -11,16 +12,11 @@ interface Department {
   isAdmin: boolean
 }
 
-const AVAILABLE_PERMISSIONS = [
-  { key: 'workspace:access', label: 'Workspace', description: 'Acceso al espacio de trabajo compartido para registrar' },
-]
-
 interface EditUserModalProps {
   user: {
     id: string
     name: string | null
     email: string
-    phone: string | null
     role: string
     permissions?: string[]
     department?: {
@@ -39,45 +35,51 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
   const [formData, setFormData] = useState({
     name: user.name || '',
     departmentId: user.department?.id || '',
-    phone: user.phone || '',
     role: user.role || 'EDITOR',
-    permissions: user.permissions || [] as string[],
+    permissions: user.permissions || ([] as string[]),
     newPassword: '',
   })
 
   const isCurrentUser = session?.user?.id === user.id
+  const sessionPermissions = ((session?.user as any)?.permissions || []) as string[]
+  const canManageCoordinatorPerm = sessionPermissions.includes('tickets:coordinator')
 
   useEffect(() => {
     fetch('/api/departments')
-      .then(res => res.json())
-      .then(data => setDepartments(data))
-      .catch(err => console.error('Error fetching departments:', err))
+      .then((res) => res.json())
+      .then((data) => setDepartments(data))
+      .catch((err) => console.error('Error fetching departments:', err))
   }, [])
 
   const togglePermission = (key: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       permissions: prev.permissions.includes(key)
-        ? prev.permissions.filter(p => p !== key)
-        : [...prev.permissions, key]
+        ? prev.permissions.filter((permission) => permission !== key)
+        : [...prev.permissions, key],
     }))
   }
+
+  const isEffectivelyChecked = (permissionKey: string) =>
+    isPermissionEffectivelyChecked(
+      { role: formData.role, permissions: formData.permissions },
+      permissionKey
+    )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (formData.newPassword && formData.newPassword.length < 6) {
-      alert('La contraseña debe tener al menos 6 caracteres')
+      alert('La contrasena debe tener al menos 6 caracteres')
       return
     }
 
     setLoading(true)
 
     try {
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         name: formData.name,
         departmentId: formData.departmentId || null,
-        phone: formData.phone,
         role: formData.role,
         permissions: formData.permissions,
       }
@@ -106,7 +108,7 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
   }
 
   const handleDelete = async () => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este usuario?')) return
+    if (!confirm('Estas seguro de que quieres eliminar este usuario?')) return
 
     setLoading(true)
     try {
@@ -164,7 +166,9 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                 disabled
                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-500 dark:text-gray-400"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">El email no se puede modificar</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                El email no se puede modificar
+              </p>
             </div>
 
             <div>
@@ -185,7 +189,6 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
               </select>
             </div>
 
-            {/* Rol */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
                 <Shield className="h-4 w-4" />
@@ -199,65 +202,67 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
               >
                 <option value="VIEWER">Lector (solo lectura)</option>
                 <option value="EDITOR">Editor (crea y edita sus datos)</option>
-                <option value="COORDINATOR">Coordinador (líder de área)</option>
+                <option value="COORDINATOR">Coordinador (lider de area)</option>
                 <option value="ADMIN">Administrador (acceso total)</option>
               </select>
               {isCurrentUser && (
                 <p className="text-xs text-amber-500 mt-1">No puedes cambiar tu propio rol</p>
               )}
-              {formData.role === 'ADMIN' && !isCurrentUser && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  Acceso completo al sistema
-                </p>
-              )}
-              {formData.role === 'COORDINATOR' && (
-                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                  Ve y gestiona datos de su departamento
-                </p>
-              )}
-              {formData.role === 'VIEWER' && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Solo lectura, no puede crear ni editar
-                </p>
-              )}
             </div>
 
-            {/* Permisos Especiales */}
-            {formData.role !== 'ADMIN' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
-                  <KeyRound className="h-4 w-4" />
-                  Permisos Especiales
-                </label>
-                <div className="space-y-2">
-                  {AVAILABLE_PERMISSIONS.map((perm) => (
-                    <label
-                      key={perm.key}
-                      className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.permissions.includes(perm.key)}
-                        onChange={() => togglePermission(perm.key)}
-                        className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-                      />
-                      <div className="flex-1">
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {perm.label}
-                        </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {perm.description}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
+                <KeyRound className="h-4 w-4" />
+                Permisos Especiales
+              </label>
+              {formData.role === 'ADMIN' && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-3">
+                  Los administradores heredan acceso total por rol. Aqui se muestran marcados los permisos efectivos; "Ver reportes por departamento" solo se marca si tambien fue asignado explicitamente.
+                </p>
+              )}
+              <div className="space-y-4">
+                {USER_PERMISSION_GROUPS.map((group) => {
+                  const visiblePerms = group.permissions.filter(
+                    (perm) => perm.key !== 'tickets:coordinator' || (canManageCoordinatorPerm && isCurrentUser)
+                  )
+                  if (visiblePerms.length === 0) return null
+                  return (
+                  <div key={group.title}>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                      {group.title}
+                    </p>
+                    <div className="space-y-2">
+                      {visiblePerms.map((perm) => (
+                        <label
+                          key={perm.key}
+                          className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isEffectivelyChecked(perm.key)}
+                            onChange={() => togglePermission(perm.key)}
+                            className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {perm.label}
+                            </span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {perm.description}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  )
+                })}
               </div>
-            )}
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Nueva Contraseña
+                Nueva Contrasena
               </label>
               <input
                 type="password"
@@ -266,19 +271,9 @@ export default function EditUserModal({ user, onClose }: EditUserModalProps) {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Dejar en blanco para mantener la actual"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Mínimo 6 caracteres. Dejar vacío para no cambiar.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Teléfono
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Minimo 6 caracteres. Dejar vacio para no cambiar.
+              </p>
             </div>
 
             <div className="flex justify-between items-center pt-4 border-t dark:border-slate-700">

@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { tutorLMSService } from '@/lib/wordpress/tutor-lms'
+import { wooCommerceService } from '@/lib/wordpress/woocommerce'
+import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/wordpress/enroll
@@ -19,23 +25,223 @@ export async function POST(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_enrollments') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 
-    const { user_id, course_id } = await request.json()
+    const body: any = await request.json()
+    const currentUser = await getSessionAuditActor(session)
+    const user_id = body.user_id ? Number(body.user_id) : undefined
+    const user_ids: number[] = Array.isArray(body.user_ids)
+      ? body.user_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+    const course_ids: number[] = Array.isArray(body.course_ids)
+      ? body.course_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+    const course_id = body.course_id ? Number(body.course_id) : undefined
+    const skip_order_check = Boolean(body.skip_order_check)
 
-    if (!user_id || !course_id) {
+    // Modo: un usuario -> múltiples cursos
+    if (user_id && course_ids.length > 0) {
+      const courseNamesFromBody: { id: number; name: string }[] = Array.isArray(body.course_names)
+        ? body.course_names.map((c: any) => ({
+            id: Number(c.id || 0),
+            name: String(c.name || c.title || `Curso #${c.id || '?'}`),
+          }))
+        : course_ids.map((id: number) => ({ id, name: `Curso #${id}` }))
+
+      const order = await wooCommerceService.createEnrollmentOrder({
+        customer_id: user_id,
+        courses: courseNamesFromBody,
+      })
+
+      if (currentUser?.id && currentUser.email) {
+        await Promise.all([
+          logEntityAudit({
+            adminId: currentUser.id,
+            adminEmail: currentUser.email,
+            targetEmail: `wp_user_${user_id}`,
+            targetName: `Pedido #${order.id}`,
+            entity: 'WORDPRESS_ORDER',
+            entityId: String(order.id),
+            event: 'created',
+            details: {
+              orderId: order.id,
+              userId: user_id,
+              courseIds: course_ids,
+              courseNames: courseNamesFromBody.map((course) => course.name),
+              mode: 'user_to_courses',
+              newStatus: order.status,
+            },
+          }),
+          ...course_ids.map((courseId) => {
+            const courseName = courseNamesFromBody.find((course) => course.id === courseId)?.name || `Curso #${courseId}`
+            return logEntityAudit({
+              adminId: currentUser.id,
+              adminEmail: currentUser.email,
+              targetEmail: `wp_user_${user_id}`,
+              targetName: `Usuario #${user_id}`,
+              entity: 'WORDPRESS_ENROLLMENT',
+              entityId: `${user_id}:${courseId}`,
+              event: 'enrolled',
+              details: {
+                userId: user_id,
+                courseId,
+                courseName,
+                orderId: order.id,
+                mode: 'user_to_courses',
+              },
+            })
+          }),
+        ])
+      }
+
+      emitResourceEvent('enrollments', {
+        action: 'enrolled',
+        mode: 'user_to_courses',
+        userId: user_id,
+        courseIds: course_ids,
+      })
+
+      return NextResponse.json({
+        success: true,
+        order_id: order.id,
+        user_id,
+        summary: {
+          requested: course_ids.length,
+          enrolled: course_ids.length,
+          already_enrolled: 0,
+          failed: 0,
+        },
+        results: course_ids.map((id) => ({
+          course_id: id,
+          success: true,
+          message: 'Pedido pendiente creado',
+          already_enrolled: false,
+        })),
+      }, { status: 201 })
+    }
+
+    if (!course_id || (!user_id && user_ids.length === 0)) {
       return NextResponse.json(
-        { error: 'user_id y course_id son requeridos' },
+        { error: 'course_id y user_id (o user_ids), o bien user_id + course_ids son requeridos' },
         { status: 400 }
       )
     }
 
-    const result = await tutorLMSService.enrollStudent(user_id, course_id)
+    // Modo individual (retrocompatibilidad)
+    if (user_id && user_ids.length === 0) {
+      const result = await tutorLMSService.enrollStudent(user_id, course_id, { skipOrderCheck: skip_order_check })
+      if (currentUser?.id && currentUser.email) {
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: `wp_user_${user_id}`,
+          targetName: `Usuario #${user_id}`,
+          entity: 'WORDPRESS_ENROLLMENT',
+          entityId: `${user_id}:${course_id}`,
+          event: 'enrolled',
+          details: {
+            userId: user_id,
+            courseId: course_id,
+            mode: 'single',
+            skipOrderCheck: skip_order_check,
+          },
+        })
+      }
+      emitResourceEvent('enrollments', {
+        action: 'enrolled',
+        mode: 'single',
+        userId: user_id,
+        courseIds: [course_id],
+      })
 
-    return NextResponse.json({ success: true, result }, { status: 201 })
+      return NextResponse.json({ success: true, result }, { status: 201 })
+    }
+
+    // Modo masivo
+    const courseTitleForOrder = (body.course_title as string | undefined) || `Curso #${course_id}`
+    const targets: number[] = user_ids.length > 0 ? user_ids : (user_id ? [user_id] : [])
+    const uniqueTargets: number[] = Array.from(new Set<number>(targets))
+    const results: Array<{ user_id: number; success: boolean; order_id?: number; error?: string }> = []
+
+    for (const targetUserId of uniqueTargets) {
+      try {
+        const order = await wooCommerceService.createEnrollmentOrder({
+          customer_id: targetUserId,
+          courses: [{ id: course_id, name: courseTitleForOrder }],
+        })
+        if (currentUser?.id && currentUser.email) {
+          await Promise.all([
+            logEntityAudit({
+              adminId: currentUser.id,
+              adminEmail: currentUser.email,
+              targetEmail: `wp_user_${targetUserId}`,
+              targetName: `Pedido #${order.id}`,
+              entity: 'WORDPRESS_ORDER',
+              entityId: String(order.id),
+              event: 'created',
+              details: {
+                orderId: order.id,
+                userId: targetUserId,
+                courseIds: [course_id],
+                courseNames: [courseTitleForOrder],
+                mode: 'course_to_users',
+                newStatus: order.status,
+              },
+            }),
+            logEntityAudit({
+              adminId: currentUser.id,
+              adminEmail: currentUser.email,
+              targetEmail: `wp_user_${targetUserId}`,
+              targetName: `Usuario #${targetUserId}`,
+              entity: 'WORDPRESS_ENROLLMENT',
+              entityId: `${targetUserId}:${course_id}`,
+              event: 'enrolled',
+              details: {
+                userId: targetUserId,
+                courseId: course_id,
+                courseName: courseTitleForOrder,
+                orderId: order.id,
+                mode: 'course_to_users',
+              },
+            }),
+          ])
+        }
+        results.push({
+          user_id: targetUserId,
+          success: true,
+          order_id: order.id,
+        })
+      } catch (error: any) {
+        results.push({
+          user_id: targetUserId,
+          success: false,
+          error: error.message || 'Error al crear pedido',
+        })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failedCount = results.length - successCount
+
+    emitResourceEvent('enrollments', {
+      action: 'enrolled',
+      mode: 'course_to_users',
+      userIds: uniqueTargets,
+      courseIds: [course_id],
+    })
+
+    return NextResponse.json({
+      success: failedCount === 0,
+      course_id,
+      total: results.length,
+      successCount,
+      failedCount,
+      results,
+    }, { status: failedCount > 0 ? 207 : 201 })
   } catch (error: any) {
     console.error('Error enrolling student:', error)
     return NextResponse.json(
@@ -61,23 +267,108 @@ export async function DELETE(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_enrollments') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 
-    const { user_id, course_id } = await request.json()
+    const body: any = await request.json()
+    const currentUser = await getSessionAuditActor(session)
+    const user_id = body.user_id ? Number(body.user_id) : undefined
+    const user_ids: number[] = Array.isArray(body.user_ids)
+      ? body.user_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+    const course_id = body.course_id ? Number(body.course_id) : undefined
 
-    if (!user_id || !course_id) {
+    if (!course_id || (!user_id && user_ids.length === 0)) {
       return NextResponse.json(
-        { error: 'user_id y course_id son requeridos' },
+        { error: 'course_id y user_id (o user_ids) son requeridos' },
         { status: 400 }
       )
     }
 
-    const result = await tutorLMSService.unenrollStudent(user_id, course_id)
+    // Modo individual (retrocompatibilidad)
+    if (user_id && user_ids.length === 0) {
+      const result = await tutorLMSService.unenrollStudent(user_id, course_id)
+      if (currentUser?.id && currentUser.email) {
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: `wp_user_${user_id}`,
+          targetName: `Usuario #${user_id}`,
+          entity: 'WORDPRESS_ENROLLMENT',
+          entityId: `${user_id}:${course_id}`,
+          event: 'unenrolled',
+          details: {
+            userId: user_id,
+            courseId: course_id,
+            mode: 'single',
+          },
+        })
+      }
+      emitResourceEvent('enrollments', {
+        action: 'unenrolled',
+        mode: 'single',
+        userId: user_id,
+        courseIds: [course_id],
+      })
 
-    return NextResponse.json({ success: true, result })
+      return NextResponse.json({ success: true, result })
+    }
+
+    // Modo masivo
+    const targets: number[] = user_ids.length > 0 ? user_ids : (user_id ? [user_id] : [])
+    const uniqueTargets: number[] = Array.from(new Set<number>(targets))
+    const results: Array<{ user_id: number; success: boolean; error?: string }> = []
+
+    for (const targetUserId of uniqueTargets) {
+      try {
+        await tutorLMSService.unenrollStudent(targetUserId, course_id)
+        if (currentUser?.id && currentUser.email) {
+          await logEntityAudit({
+            adminId: currentUser.id,
+            adminEmail: currentUser.email,
+            targetEmail: `wp_user_${targetUserId}`,
+            targetName: `Usuario #${targetUserId}`,
+            entity: 'WORDPRESS_ENROLLMENT',
+            entityId: `${targetUserId}:${course_id}`,
+            event: 'unenrolled',
+            details: {
+              userId: targetUserId,
+              courseId: course_id,
+              mode: 'bulk',
+            },
+          })
+        }
+        results.push({ user_id: targetUserId, success: true })
+      } catch (error: any) {
+        results.push({
+          user_id: targetUserId,
+          success: false,
+          error: error.message || 'Error al desmatricular',
+        })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failedCount = results.length - successCount
+
+    emitResourceEvent('enrollments', {
+      action: 'unenrolled',
+      mode: 'bulk',
+      userIds: uniqueTargets,
+      courseIds: [course_id],
+    })
+
+    return NextResponse.json({
+      success: failedCount === 0,
+      course_id,
+      total: results.length,
+      successCount,
+      failedCount,
+      results,
+    }, { status: failedCount > 0 ? 207 : 200 })
   } catch (error: any) {
     console.error('Error unenrolling student:', error)
     return NextResponse.json(

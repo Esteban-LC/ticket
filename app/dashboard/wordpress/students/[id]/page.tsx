@@ -5,6 +5,7 @@ import WordPressUserProfile from '@/components/wordpress/WordPressUserProfile'
 import { prisma } from '@/lib/prisma'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
+import { canAccessWordPressStudents } from '@/lib/permissions'
 
 export default async function WordPressUserPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -17,10 +18,7 @@ export default async function WordPressUserPage({ params }: { params: { id: stri
 
   if (!currentUser) redirect('/login')
 
-  const hasPermission =
-    currentUser.role === 'ADMIN' ||
-    currentUser.permissions.includes('wordpress:access') ||
-    currentUser.permissions.includes('wordpress:manage_users')
+  const hasPermission = canAccessWordPressStudents(currentUser)
 
   if (!hasPermission) redirect('/dashboard')
 

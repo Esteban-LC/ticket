@@ -9,11 +9,6 @@ interface TicketFiltersProps {
   currentPriority?: string
   currentAssignee?: string
   currentSearch?: string
-  agents: Array<{
-    id: string
-    name: string | null
-    email: string
-  }>
 }
 
 export default function TicketFilters({
@@ -21,7 +16,6 @@ export default function TicketFilters({
   currentPriority,
   currentAssignee,
   currentSearch,
-  agents,
 }: TicketFiltersProps) {
   const [searchTerm, setSearchTerm] = useState(currentSearch || '')
   const router = useRouter()
@@ -70,14 +64,13 @@ export default function TicketFilters({
         </div>
       </form>
 
-      {/* Filtros - Responsive */}
+      {/* Filtros */}
       <div className="space-y-2 lg:space-y-0 lg:flex lg:items-center lg:space-x-4">
         <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
           <Filter className="h-4 w-4 lg:h-5 lg:w-5" />
           <span className="text-sm lg:text-base font-medium">Filtros:</span>
         </div>
 
-        {/* Grid de filtros en móvil, flex en desktop */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex gap-2 lg:gap-3 lg:flex-1">
           <select
             value={currentStatus || ''}
@@ -108,13 +101,8 @@ export default function TicketFilters({
             onChange={(e) => updateFilter('assignee', e.target.value)}
             className="px-2 lg:px-3 py-2 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 sm:col-span-2 lg:col-span-1"
           >
-            <option value="">Todos los agentes</option>
-            <option value="unassigned">Sin asignar</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name || agent.email}
-              </option>
-            ))}
+            <option value="">Todos los tickets</option>
+            <option value="mine">Mis asignaciones</option>
           </select>
         </div>
 

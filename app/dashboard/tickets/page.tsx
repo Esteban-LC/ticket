@@ -31,7 +31,18 @@ export default async function TicketsPage({
   // Obtener usuario completo con su rol
   const user = await prisma.user.findUnique({
     where: { email: session.user.email || '' },
-    select: { id: true, name: true, email: true, role: true, permissions: true }
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      permissions: true,
+      department: {
+        select: {
+          isAdmin: true
+        }
+      }
+    }
   })
 
   if (!user) {
@@ -63,19 +74,58 @@ export default async function TicketsPage({
   if (searchParams.assignee) {
     if (searchParams.assignee === 'unassigned') {
       whereClause.assigneeId = null
+    } else if (searchParams.assignee === 'mine') {
+      whereClause.assigneeId = user.id
     } else {
       whereClause.assigneeId = searchParams.assignee
     }
   }
 
   if (searchParams.search) {
-    whereClause.subject = {
-      contains: searchParams.search,
-      mode: 'insensitive'
+    const query = searchParams.search.trim()
+    const exactNumber = Number.parseInt(query, 10)
+
+    const searchConditions = [
+      {
+        subject: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      {
+        ticketCode: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      {
+        requesterArea: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      {
+        requestedBy: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      ...(Number.isInteger(exactNumber) ? [{ number: exactNumber }] : []),
+    ]
+
+    if (Array.isArray(whereClause.OR)) {
+      whereClause.AND = [
+        ...(Array.isArray(whereClause.AND) ? whereClause.AND : []),
+        { OR: whereClause.OR },
+        { OR: searchConditions },
+      ]
+      delete whereClause.OR
+    } else {
+      whereClause.OR = searchConditions
     }
   }
 
-  const [tickets, totalCount, agents, openTicketsCount] = await Promise.all([
+  const [tickets, totalCount, openTicketsCount] = await Promise.all([
     prisma.ticket.findMany({
       where: whereClause,
       include: {
@@ -113,18 +163,6 @@ export default async function TicketsPage({
       take: perPage,
     }),
     prisma.ticket.count({ where: whereClause }),
-    prisma.user.findMany({
-      where: {
-        role: {
-          in: ['ADMIN', 'COORDINATOR']
-        }
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      }
-    }),
     // Filtrar contador según el rol
     prisma.ticket.count({
       where: user.role === 'EDITOR' || user.role === 'VIEWER'
@@ -134,6 +172,13 @@ export default async function TicketsPage({
         : { status: 'OPEN' }
     })
   ])
+
+  const canDelete = user.role === 'COORDINATOR' || user.permissions.includes('tickets:coordinator')
+  const canSelfAssign =
+    user.role === 'ADMIN' ||
+    user.role === 'COORDINATOR' ||
+    user.permissions.includes('tickets:coordinator') ||
+    user.department?.isAdmin === true
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950">
@@ -157,13 +202,13 @@ export default async function TicketsPage({
               currentPriority={searchParams.priority}
               currentAssignee={searchParams.assignee}
               currentSearch={searchParams.search}
-              agents={agents}
             />
 
             <TicketsTable
               tickets={tickets}
-              agents={agents}
-              currentUserId={session.user.id}
+              currentUserId={user.id}
+              canDelete={canDelete}
+              canSelfAssign={canSelfAssign}
             />
 
             <Pagination

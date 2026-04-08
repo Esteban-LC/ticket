@@ -19,12 +19,21 @@ export default async function AgendaPage() {
     // Obtener usuario completo
     const user = await prisma.user.findUnique({
         where: { email: session.user.email || '' },
-        select: { id: true, name: true, email: true, role: true, permissions: true }
+        select: { id: true, name: true, email: true, role: true, permissions: true, departmentId: true }
     })
 
     if (!user) {
         redirect('/login')
     }
+
+    // Obtener usuarios del mismo departamento para el selector de responsable
+    const departmentUsers = user.departmentId
+        ? await prisma.user.findMany({
+            where: { departmentId: user.departmentId, deletedAt: null },
+            select: { id: true, name: true, email: true },
+            orderBy: { name: 'asc' }
+        })
+        : []
 
     const openTicketsCount = await prisma.ticket.count({
         where: { status: 'OPEN' }
@@ -34,6 +43,7 @@ export default async function AgendaPage() {
         <AgendaClient
             user={user}
             openTicketsCount={openTicketsCount}
+            departmentUsers={departmentUsers}
         />
     )
 }

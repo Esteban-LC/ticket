@@ -18,9 +18,9 @@ export async function GET(
     }
 
     // Obtener usuario con su rol
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
-      select: { role: true }
+    const user = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
+      select: { id: true, email: true, role: true }
     })
 
     // Solo ADMIN pueden ver customers
@@ -31,10 +31,11 @@ export async function GET(
       )
     }
 
-    const customer = await prisma.user.findUnique({
+    const customer = await prisma.user.findFirst({
       where: { 
         id: params.id,
-        role: 'VIEWER'
+        role: 'VIEWER',
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -79,9 +80,9 @@ export async function PATCH(
     }
 
     // Obtener usuario con su rol
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
-      select: { role: true }
+    const user = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
+      select: { id: true, email: true, role: true }
     })
 
     // Solo ADMIN pueden editar customers
@@ -94,11 +95,24 @@ export async function PATCH(
 
     const data = await request.json()
 
-    const customer = await prisma.user.update({
-      where: { 
+    const existingCustomer = await prisma.user.findFirst({
+      where: {
         id: params.id,
-        role: 'VIEWER'
+        role: 'VIEWER',
+        deletedAt: null,
       },
+      select: { id: true },
+    })
+
+    if (!existingCustomer) {
+      return NextResponse.json(
+        { error: 'Cliente no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    const customer = await prisma.user.update({
+      where: { id: existingCustomer.id },
       data: {
         name: data.name,
         phone: data.phone,
@@ -142,9 +156,9 @@ export async function DELETE(
     }
 
     // Obtener usuario con su rol
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
-      select: { role: true }
+    const user = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
+      select: { id: true, email: true, role: true }
     })
 
     // Solo ADMIN pueden eliminar customers
@@ -155,11 +169,47 @@ export async function DELETE(
       )
     }
 
-    await prisma.user.delete({
-      where: { 
+    const customerToDelete = await prisma.user.findFirst({
+      where: {
         id: params.id,
-        role: 'VIEWER'
+        role: 'VIEWER',
+        deletedAt: null,
+      },
+      select: { id: true, email: true, name: true },
+    })
+
+    if (!customerToDelete) {
+      return NextResponse.json(
+        { error: 'Cliente no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    const deletedSuffix = Date.now()
+    const tombstoneEmail = `deleted+${deletedSuffix}.${customerToDelete.id}@deleted.local`
+
+    await prisma.user.update({
+      where: { id: customerToDelete.id },
+      data: {
+        deletedAt: new Date(),
+        email: tombstoneEmail,
       }
+    })
+
+    await prisma.adminLog.create({
+      data: {
+        action: 'DELETE_USER',
+        adminId: user.id,
+        adminEmail: user.email,
+        targetEmail: customerToDelete.email,
+        targetName: customerToDelete.name || null,
+        details: {
+          softDelete: true,
+          entity: 'CUSTOMER',
+          userId: customerToDelete.id,
+          tombstoneEmail,
+        },
+      },
     })
 
     return NextResponse.json({ message: 'Cliente eliminado' })

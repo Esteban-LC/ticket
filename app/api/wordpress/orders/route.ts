@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { wooCommerceService } from '@/lib/wordpress/woocommerce'
+import { getEntityAuditTrailMap, getRecentEntityAuditEntries } from '@/lib/audit-log'
 
 /**
  * GET /api/wordpress/orders
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_orders') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
@@ -39,7 +41,19 @@ export async function GET(request: NextRequest) {
       customer,
     })
 
-    return NextResponse.json({ orders })
+    const auditTrailMap = await getEntityAuditTrailMap(
+      'WORDPRESS_ORDER',
+      orders.map((order) => String(order.id))
+    )
+    const recentActions = await getRecentEntityAuditEntries('WORDPRESS_ORDER', 20)
+
+    return NextResponse.json({
+      orders: orders.map((order) => ({
+        ...order,
+        auditTrail: auditTrailMap.get(String(order.id)) || [],
+      })),
+      recentActions,
+    })
   } catch (error: any) {
     console.error('Error fetching orders:', error)
     return NextResponse.json(
@@ -64,6 +78,7 @@ export async function POST(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_orders') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       session.user.role !== 'ADMIN'
     ) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })

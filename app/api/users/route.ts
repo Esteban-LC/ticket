@@ -16,8 +16,8 @@ export async function GET(request: Request) {
     }
 
     // Obtener usuario con su rol
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
+    const user = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
       select: { role: true }
     })
 
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     const roleFilter = searchParams.get('role')
 
     // Build where clause
-    const where: any = {}
+    const where: any = { deletedAt: null }
     if (roleFilter) {
       const roles = roleFilter.split(',')
       where.role = { in: roles }
@@ -48,7 +48,6 @@ export async function GET(request: Request) {
         email: true,
         avatar: true,
         role: true,
-        phone: true,
         createdAt: true,
         department: {
           select: {
@@ -85,8 +84,8 @@ export async function POST(request: Request) {
     }
 
     // Obtener usuario con su rol
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email || '' },
+    const currentUser = await prisma.user.findFirst({
+      where: { email: session.user.email || '', deletedAt: null },
       select: { role: true }
     })
 
@@ -98,7 +97,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { name, email, password, phone, departmentId, role, permissions } = await request.json()
+    const { name, email, password, departmentId, role, permissions } = await request.json()
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -108,8 +107,8 @@ export async function POST(request: Request) {
     }
 
     // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
+    const existingUser = await prisma.user.findFirst({
+      where: { email, deletedAt: null }
     })
 
     if (existingUser) {
@@ -133,7 +132,6 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword,
         role: userRole,
-        phone,
         departmentId: departmentId || null,
         permissions: Array.isArray(permissions) ? permissions : [],
       },

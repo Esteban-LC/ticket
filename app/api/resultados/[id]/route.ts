@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 // PATCH /api/resultados/[id] - Actualizar resultado
 export async function PATCH(
@@ -55,6 +59,8 @@ export async function PATCH(
             }
         })
 
+        emitResourceEvent('results', { action: 'updated', id: item.id })
+
         return NextResponse.json(item)
     } catch (error) {
         console.error('Error al actualizar resultado:', error)
@@ -100,6 +106,8 @@ export async function DELETE(
         }
 
         await prisma.resultItem.delete({ where: { id: params.id } })
+
+        emitResourceEvent('results', { action: 'deleted', id: params.id })
 
         return NextResponse.json({ message: 'Eliminado' })
     } catch (error) {

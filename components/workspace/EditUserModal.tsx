@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X, Save, Eye, EyeOff, Loader2, UserCog } from 'lucide-react'
 import OrgUnitCombobox from './OrgUnitCombobox'
+import UnsavedChangesDialog from '@/components/ui/UnsavedChangesDialog'
+import { useUnsavedChangesWarning } from '@/lib/useUnsavedChangesWarning'
+import { emitClientResourceEvent } from '@/lib/clientResourceEvents'
 
 interface WorkspaceUser {
   id: string
@@ -41,6 +44,17 @@ export default function EditUserModal({ user, orgUnits, onClose, onUpdated }: Ed
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+
+  const hasUnsavedChanges = useMemo(() => (
+    form.givenName !== (user.name.givenName || '') ||
+    form.familyName !== (user.name.familyName || '') ||
+    form.orgUnitPath !== (user.orgUnitPath || '/') ||
+    form.password !== '' ||
+    form.changePasswordAtNextLogin !== true
+  ), [form, user])
+
+  useUnsavedChangesWarning(hasUnsavedChanges)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,12 +84,26 @@ export default function EditUserModal({ user, orgUnits, onClose, onUpdated }: Ed
         throw new Error(data.error || 'Error al actualizar usuario')
       }
 
+      emitClientResourceEvent('workspace', { action: 'updated', targetEmail: user.primaryEmail })
       onUpdated()
     } catch (err: any) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleRequestClose = () => {
+    if (loading) {
+      return
+    }
+
+    if (hasUnsavedChanges) {
+      setShowUnsavedDialog(true)
+      return
+    }
+
+    onClose()
   }
 
   return (
@@ -95,7 +123,7 @@ export default function EditUserModal({ user, orgUnits, onClose, onUpdated }: Ed
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition"
           >
             <X className="h-5 w-5 text-gray-500" />
@@ -185,7 +213,7 @@ export default function EditUserModal({ user, orgUnits, onClose, onUpdated }: Ed
           <div className="flex gap-3 pt-4 border-t dark:border-slate-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition font-medium"
             >
               Cancelar
@@ -210,6 +238,14 @@ export default function EditUserModal({ user, orgUnits, onClose, onUpdated }: Ed
           </div>
         </form>
       </div>
+      <UnsavedChangesDialog
+        isOpen={showUnsavedDialog}
+        onKeepEditing={() => setShowUnsavedDialog(false)}
+        onDiscard={() => {
+          setShowUnsavedDialog(false)
+          onClose()
+        }}
+      />
     </div>
   )
 }

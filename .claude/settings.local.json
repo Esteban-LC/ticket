@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/Users/Ti/ticket log --oneline -20)",
+      "Bash(find /c/Users/Ti/ticket -path */node_modules -prune -o -name *google* -type f -print)",
+      "mcp__ba4db2e4-d6b5-47bc-a9d7-7b4ded73f46c__validate_and_render_mermaid_diagram"
+    ]
+  }
+}

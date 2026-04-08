@@ -6,6 +6,7 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import MobileHeader from '@/components/dashboard/MobileHeader'
 import dynamic from 'next/dynamic'
 import { TableSkeleton } from '@/components/ui/Loading'
+import { canAccessWorkspace } from '@/lib/permissions'
 
 const WorkspaceClient = dynamic(() => import('@/components/workspace/WorkspaceClient'), {
     ssr: false,
@@ -36,7 +37,7 @@ export default async function WorkspacePage() {
     redirect('/login')
   }
 
-  if (user.role !== 'ADMIN') {
+  if (!canAccessWorkspace(user)) {
     redirect('/dashboard')
   }
 
@@ -51,7 +52,7 @@ export default async function WorkspacePage() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 lg:p-8">
-            <WorkspaceClient />
+            <WorkspaceClient currentUser={user} />
           </div>
         </main>
       </div>

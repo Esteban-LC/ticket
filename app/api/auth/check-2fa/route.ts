@@ -13,8 +13,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        deletedAt: null,
+      },
       select: {
         id: true,
         password: true,
@@ -50,3 +53,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+

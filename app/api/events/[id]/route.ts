@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 const eventUpdateSchema = z.object({
     title: z.string().min(1).optional(),
@@ -92,8 +96,8 @@ export async function PATCH(
             return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 })
         }
 
-        // Verificar permisos (solo el creador o admin puede editar)
-        if (existingEvent.userId !== user.id && user.role !== 'ADMIN') {
+        // Solo el creador puede editar
+        if (existingEvent.userId !== user.id) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 
@@ -137,6 +141,8 @@ export async function PATCH(
                 }
             }
         })
+
+        emitResourceEvent('events', { action: 'updated', id: event.id })
 
         return NextResponse.json(event)
     } catch (error) {
@@ -183,14 +189,16 @@ export async function DELETE(
             return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 })
         }
 
-        // Verificar permisos (solo el creador o admin puede eliminar)
-        if (existingEvent.userId !== user.id && user.role !== 'ADMIN') {
+        // Solo el creador puede eliminar
+        if (existingEvent.userId !== user.id) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 
         await prisma.event.delete({
             where: { id: params.id }
         })
+
+        emitResourceEvent('events', { action: 'deleted', id: params.id })
 
         return NextResponse.json({ message: 'Evento eliminado correctamente' })
     } catch (error) {

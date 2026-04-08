@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { AlertTriangle, Trash2, PauseCircle, PlayCircle, Loader2 } from 'lucide-react'
 
 interface ConfirmModalProps {
@@ -10,6 +10,8 @@ interface ConfirmModalProps {
   variant: 'danger' | 'warning' | 'success'
   onConfirm: () => Promise<void>
   onCancel: () => void
+  extraContent?: ReactNode
+  confirmDisabled?: boolean
 }
 
 const variantStyles = {
@@ -40,6 +42,8 @@ export default function ConfirmModal({
   variant,
   onConfirm,
   onCancel,
+  extraContent,
+  confirmDisabled = false,
 }: ConfirmModalProps) {
   const [loading, setLoading] = useState(false)
   const styles = variantStyles[variant]
@@ -67,6 +71,7 @@ export default function ConfirmModal({
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{message}</p>
             </div>
           </div>
+          {extraContent && <div className="mt-4">{extraContent}</div>}
         </div>
 
         <div className="flex gap-3 p-6 pt-0">
@@ -81,7 +86,7 @@ export default function ConfirmModal({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={loading}
+            disabled={loading || confirmDisabled}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg disabled:opacity-50 transition font-medium ${styles.button}`}
           >
             {loading ? (

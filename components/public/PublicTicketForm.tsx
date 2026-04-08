@@ -12,11 +12,10 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [ticketNumber, setTicketNumber] = useState<number | null>(null)
+  const [ticketIdentifier, setTicketIdentifier] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     subject: '',
     description: '',
-    priority: 'NORMAL',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,12 +36,11 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
 
       if (response.ok) {
         const ticket = await response.json()
-        setTicketNumber(ticket.number)
+        setTicketIdentifier(ticket.ticketCode || `#${ticket.number}`)
         setSuccess(true)
         setFormData({
           subject: '',
           description: '',
-          priority: 'NORMAL',
         })
       } else {
         alert('Error al crear el ticket')
@@ -63,7 +61,7 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
           ¡Ticket Creado!
         </h2>
         <p className="text-gray-600 mb-4">
-          Tu ticket #{ticketNumber} ha sido creado exitosamente.
+          Tu ticket {ticketIdentifier} ha sido creado exitosamente.
         </p>
         <p className="text-sm text-gray-500 mb-6">
           Nuestro equipo de soporte lo revisará pronto y te contactará por email.
@@ -107,22 +105,6 @@ export default function PublicTicketForm({ customerId }: PublicTicketFormProps) 
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             placeholder="Proporciona todos los detalles posibles sobre tu problema..."
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Prioridad
-          </label>
-          <select
-            value={formData.priority}
-            onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="LOW">Baja</option>
-            <option value="NORMAL">Normal</option>
-            <option value="HIGH">Alta</option>
-            <option value="URGENT">Urgente</option>
-          </select>
         </div>
 
         <div className="flex justify-end pt-4 border-t">

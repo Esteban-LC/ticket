@@ -13,6 +13,9 @@
 # production
 /build
 
+# local uploads
+/public/uploads/
+
 # misc
 .DS_Store
 *.pem
@@ -41,3 +44,4 @@ google-credentials.json
 *-credentials.json
 *-service-account.json
 gmail-correo-*.json
+drive-*.json

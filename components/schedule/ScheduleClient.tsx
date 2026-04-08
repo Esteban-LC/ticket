@@ -68,7 +68,10 @@ export default function ScheduleClient({ user, openTicketsCount }: ScheduleClien
                             </div>
 
                             {/* Content */}
-                            {view === 'calendar' ? <Calendar /> : <Timeline />}
+                            {view === 'calendar'
+                                ? <Calendar currentUserId={user.id} currentUserRole={user.role} />
+                                : <Timeline currentUserId={user.id} currentUserRole={user.role} />
+                            }
                         </div>
                     </main>
                 </div>

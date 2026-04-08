@@ -8,6 +8,12 @@ import {
   suspendWorkspaceUser,
 } from '@/lib/google-admin'
 import { logAdminAction } from '@/lib/admin-log'
+import { prisma } from '@/lib/prisma'
+import { canAccessWorkspace, canManageWorkspace } from '@/lib/permissions'
+import { emitResourceEvent } from '@/lib/resourceEvents'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +21,16 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canAccessWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
@@ -36,7 +51,16 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canManageWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
@@ -95,6 +119,11 @@ export async function PATCH(
       })
     }
 
+    emitResourceEvent('workspace', {
+      action: action === 'suspend' ? 'suspended' : action === 'unsuspend' ? 'unsuspended' : 'updated',
+      targetEmail: params.userKey,
+    })
+
     return NextResponse.json(user)
   } catch (error: any) {
     console.error('Error updating workspace user:', error)
@@ -111,7 +140,16 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canManageWorkspace(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
@@ -123,6 +161,8 @@ export async function DELETE(
       adminEmail: session.user.email!,
       targetEmail: params.userKey,
     })
+
+    emitResourceEvent('workspace', { action: 'deleted', targetEmail: params.userKey })
 
     return NextResponse.json({ success: true, message: 'Usuario eliminado correctamente' })
   } catch (error: any) {

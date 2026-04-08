@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { wpUserService } from '@/lib/wordpress/users'
 import { prisma } from '@/lib/prisma'
+import { canManageTuitionStatus, canViewWordPressUsers } from '@/lib/permissions'
+import { getSessionAuditActor, logEntityAudit } from '@/lib/audit-log'
+import { getEffectiveSuspensionState, syncWordPressSuspensionState } from '@/lib/wordpress/suspension-sync'
 
 /**
  * GET /api/wordpress/users/[id]
@@ -20,22 +23,38 @@ export async function GET(
     }
 
     const userPermissions = (session.user as any).permissions || []
-    if (!userPermissions.includes('wordpress:manage_users') && session.user.role !== 'ADMIN') {
+    if (!canViewWordPressUsers({ role: session.user.role, permissions: userPermissions }) &&
+      !canManageTuitionStatus({ role: session.user.role, permissions: userPermissions })) {
       return NextResponse.json({ error: 'Sin permisos suficientes' }, { status: 403 })
     }
 
     const userId = parseInt(params.id)
     const user = await wpUserService.getUser(userId)
+    const suspensionStatus = await wpUserService.getSuspensionStatus(userId).catch(() => null)
+    const userWithSuspension = {
+      ...user,
+      is_suspended: suspensionStatus?.suspended ?? user.is_suspended,
+      suspension_reason: suspensionStatus?.reason ?? user.suspension_reason,
+      suspended_at: suspensionStatus?.suspended_at ?? user.suspended_at,
+    }
+    await syncWordPressSuspensionState([userWithSuspension])
 
     // Merge con estado de suspensión local
-    const localUser = await prisma.wordPressUser.findUnique({ where: { id: userId } })
+    const localUser = await prisma.wordPressUser.findFirst({
+      where: { id: userId, deletedAt: null },
+    })
+    const effectiveSuspension = getEffectiveSuspensionState(userWithSuspension, localUser)
 
     return NextResponse.json({
       user: {
-        ...user,
-        isSuspended: localUser?.isSuspended || false,
-        suspensionReason: localUser?.suspensionReason || null,
-        suspendedAt: localUser?.suspendedAt || null,
+        ...userWithSuspension,
+        isSuspended: effectiveSuspension.isSuspended,
+        suspensionReason: effectiveSuspension.suspensionReason,
+        suspendedAt: effectiveSuspension.suspendedAt,
+        paymentStatus: localUser?.paymentStatus || 'CURRENT',
+        paymentNotes: localUser?.paymentNotes || null,
+        paymentUpdatedAt: localUser?.paymentUpdatedAt || null,
+        paymentUpdatedBy: localUser?.paymentUpdatedBy || null,
       }
     })
   } catch (error: any) {
@@ -109,6 +128,62 @@ export async function DELETE(
       : undefined
 
     const result = await wpUserService.deleteUser(userId, reassign)
+
+    const currentUser = await getSessionAuditActor(session)
+
+    const localUser = await prisma.wordPressUser.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true, email: true, name: true },
+    })
+
+    if (localUser) {
+      const deletedSuffix = Date.now()
+      const tombstoneEmail = `deleted+${deletedSuffix}.${localUser.id}@wp-deleted.local`
+
+      await prisma.wordPressUser.update({
+        where: { id: localUser.id },
+        data: {
+          deletedAt: new Date(),
+          email: tombstoneEmail,
+          isSuspended: false,
+          suspendedBy: null,
+          suspendedAt: null,
+          suspensionReason: null,
+        },
+      })
+
+      if (currentUser) {
+        await prisma.adminLog.create({
+          data: {
+            action: 'DELETE_USER',
+            adminId: currentUser.id,
+            adminEmail: currentUser.email,
+            targetEmail: localUser.email,
+            targetName: localUser.name || null,
+            details: {
+              softDelete: true,
+              entity: 'WORDPRESS_USER',
+              wordPressUserId: localUser.id,
+              tombstoneEmail,
+            },
+          },
+        })
+
+        await logEntityAudit({
+          adminId: currentUser.id,
+          adminEmail: currentUser.email,
+          targetEmail: localUser.email,
+          targetName: localUser.name || null,
+          entity: 'WORDPRESS_USER',
+          entityId: String(localUser.id),
+          event: 'deleted',
+          details: {
+            mode: 'single',
+            reassign: reassign || null,
+          },
+        })
+      }
+    }
 
     return NextResponse.json({ success: true, result })
   } catch (error: any) {

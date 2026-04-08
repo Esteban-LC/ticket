@@ -1,11 +1,36 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Upload, X, File, FileText, Calendar, Tag, FolderTree, AlertCircle } from 'lucide-react'
+import { Upload, X, File, FileText, Calendar, Tag, FolderTree, AlertCircle, User, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
-interface Category {
+const STOP_WORDS = new Set([
+  'a', 'al', 'con', 'de', 'del', 'e', 'el', 'en', 'es', 'esta', 'este', 'esto',
+  'la', 'las', 'le', 'les', 'lo', 'los', 'más', 'me', 'mi', 'no', 'o', 'para',
+  'por', 'que', 'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'un', 'una', 'uno',
+  'y', 'ya', 'yo', 'nos', 'ha', 'hay', 'como', 'ser', 'son', 'fue', 'sea',
+])
+
+function extractTagSuggestions(fields: string[], existingTags: string[]): string[] {
+  const text = fields.join(' ')
+  const existing = new Set(existingTags.map(t => t.toLowerCase().trim()))
+  const seen = new Set<string>()
+  const suggestions: string[] = []
+
+  const words = text.split(/[\s,;:.!?()[\]{}\-/\\]+/)
+  for (const word of words) {
+    const clean = word.replace(/[^a-záéíóúüñA-ZÁÉÍÓÚÜÑ]/g, '').toLowerCase()
+    if (clean.length >= 4 && !STOP_WORDS.has(clean) && !seen.has(clean) && !existing.has(clean)) {
+      seen.add(clean)
+      suggestions.push(clean)
+    }
+    if (suggestions.length >= 10) break
+  }
+  return suggestions
+}
+
+interface Department {
   id: string
   name: string
 }
@@ -14,6 +39,7 @@ interface CreateTicketFormProps {
   currentUser: {
     id: string
     role: string
+    name: string
   }
 }
 
@@ -32,7 +58,7 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [categories, setCategories] = useState<Category[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [formData, setFormData] = useState({
     customerId: currentUser.id,
     subject: '',
@@ -40,26 +66,28 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
     impact: '',
     dueDate: getCurrentDateTime(),
     closureCriteria: '',
-    priority: 'NORMAL',
     type: '',
-    categoryId: '',
+    typeOther: '',
+    requestedBy: currentUser.name,
+    requesterArea: '',
+    requesterResponsible: '',
     tags: '',
   })
   const [attachments, setAttachments] = useState<File[]>([])
 
   useEffect(() => {
-    fetchCategories()
+    fetchDepartments()
   }, [])
 
-  const fetchCategories = async () => {
+  const fetchDepartments = async () => {
     try {
-      const response = await fetch('/api/categories')
+      const response = await fetch('/api/departments')
       if (response.ok) {
         const data = await response.json()
-        setCategories(data)
+        setDepartments(data)
       }
     } catch (error) {
-      console.error('Error al cargar categorías:', error)
+      console.error('Error al cargar departamentos:', error)
     }
   }
 
@@ -74,18 +102,38 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
     setAttachments(prev => prev.filter((_, i) => i !== index))
   }
 
-  const uploadFiles = async (files: File[]): Promise<string[]> => {
-    const uploadedUrls: string[] = []
+  const uploadFiles = async (files: File[], ticketId: string): Promise<{ uploaded: string[]; failed: string[] }> => {
+    const uploaded: string[] = []
+    const failed: string[] = []
 
     for (const file of files) {
       try {
-        uploadedUrls.push(file.name)
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('ticketId', ticketId)
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error(`No se pudo subir ${file.name}`)
+        }
+
+        const data = await response.json()
+        if (typeof data.serializedAttachment === 'string') {
+          uploaded.push(data.serializedAttachment)
+        } else {
+          throw new Error(`Respuesta invalida al subir ${file.name}`)
+        }
       } catch (error) {
         console.error('Error uploading file:', error)
+        failed.push(file.name)
       }
     }
 
-    return uploadedUrls
+    return { uploaded, failed }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -94,8 +142,6 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
     setError('')
 
     try {
-      const attachmentUrls = await uploadFiles(attachments)
-
       const response = await fetch('/api/tickets', {
         method: 'POST',
         headers: {
@@ -104,14 +150,35 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
         body: JSON.stringify({
           ...formData,
           type: formData.type || null,
-          categoryId: formData.categoryId || null,
+          typeOther: formData.type === 'OTHER' ? formData.typeOther : null,
           tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-          attachments: attachmentUrls
+          attachments: []
         }),
       })
 
       if (response.ok) {
         const ticket = await response.json()
+
+        if (attachments.length > 0) {
+          const { uploaded, failed } = await uploadFiles(attachments, ticket.id)
+
+          if (uploaded.length > 0) {
+            await fetch(`/api/tickets/${ticket.id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                attachments: uploaded,
+              }),
+            })
+          }
+
+          if (failed.length > 0) {
+            alert(`El ticket se creo, pero no se pudieron subir estos archivos: ${failed.join(', ')}`)
+          }
+        }
+
         router.push(`/dashboard/tickets/${ticket.id}`)
       } else {
         setError('Error al crear el ticket')
@@ -121,6 +188,26 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
       setError('Error al crear el ticket')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const existingTags = useMemo(
+    () => formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+    [formData.tags]
+  )
+
+  const tagSuggestions = useMemo(
+    () => extractTagSuggestions(
+      [formData.subject, formData.description, formData.impact, formData.closureCriteria],
+      existingTags
+    ),
+    [formData.subject, formData.description, formData.impact, formData.closureCriteria, existingTags]
+  )
+
+  const addSuggestedTag = (tag: string) => {
+    const current = formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+    if (!current.includes(tag)) {
+      setFormData({ ...formData, tags: [...current, tag].join(', ') })
     }
   }
 
@@ -146,6 +233,123 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Identificación del solicitante */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+            {/* Área del solicitante */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                  <Building2 className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                    Área del solicitante
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Departamento o área que realiza la solicitud
+                  </p>
+                </div>
+              </div>
+              <select
+                value={formData.requesterArea}
+                onChange={(e) => setFormData({ ...formData, requesterArea: e.target.value })}
+                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">Seleccionar...</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.name}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quién lo solicita */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
+                  <User className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                    Quién lo solicita
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Nombre de quien origina la solicitud
+                  </p>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={formData.requestedBy}
+                onChange={(e) => setFormData({ ...formData, requestedBy: e.target.value })}
+                placeholder="Ej: Juan Pérez"
+                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            {/* Responsable solicitante */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-lg">
+                  <User className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                    Responsable solicitante
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Coordinador o responsable del área
+                  </p>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={formData.requesterResponsible}
+                onChange={(e) => setFormData({ ...formData, requesterResponsible: e.target.value })}
+                placeholder="Ej: María García"
+                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            {/* Tipo de solicitud */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg">
+                  <FolderTree className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                    Tipo de solicitud
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Naturaleza del requerimiento
+                  </p>
+                </div>
+              </div>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value, typeOther: '' })}
+                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">Seleccionar...</option>
+                <option value="INCIDENT">Incidente</option>
+                <option value="CHANGE_REQUEST">Solicitud de cambio</option>
+                <option value="PROJECT">Proyecto</option>
+                <option value="OTHER">Otro</option>
+              </select>
+              {formData.type === 'OTHER' && (
+                <input
+                  type="text"
+                  value={formData.typeOther}
+                  onChange={(e) => setFormData({ ...formData, typeOther: e.target.value })}
+                  placeholder="Especifica el tipo de solicitud..."
+                  className="mt-3 w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              )}
+            </div>
+          </div>
+
           {/* Información Básica */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             {/* Nombre de la solicitud */}
@@ -299,7 +503,7 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
                   onChange={handleFileChange}
                   className="hidden"
                   id="file-upload"
-                  accept="image/*,.pdf,.doc,.docx,.txt"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
                 />
                 <label
                   htmlFor="file-upload"
@@ -337,92 +541,6 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
             </div>
           </div>
 
-          {/* Clasificación */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-            {/* Prioridad */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    Prioridad
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Nivel de urgencia
-                  </p>
-                </div>
-              </div>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="LOW">Baja</option>
-                <option value="NORMAL">Normal</option>
-                <option value="HIGH">Alta</option>
-                <option value="URGENT">Urgente</option>
-              </select>
-            </div>
-
-            {/* Tipo */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg">
-                  <FolderTree className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    Tipo
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Categoría del ticket
-                  </p>
-                </div>
-              </div>
-              <select
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">Seleccionar...</option>
-                <option value="INCIDENT">Incidente</option>
-                <option value="CHANGE_REQUEST">Solicitud de cambio</option>
-                <option value="PROJECT">Proyecto</option>
-              </select>
-            </div>
-
-            {/* Categoría */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-                  <Tag className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    Categoría
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Área específica
-                  </p>
-                </div>
-              </div>
-              <select
-                value={formData.categoryId}
-                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">Seleccionar...</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           {/* Etiquetas */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6">
             <div className="flex items-start gap-3 mb-4">
@@ -442,9 +560,26 @@ export default function CreateTicketForm({ currentUser }: CreateTicketFormProps)
               type="text"
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-              placeholder="Ej: bug, urgente, producción"
+              placeholder="Ej: reportes, producción, acceso"
               className="w-full px-4 py-3 text-sm lg:text-base border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
+            {tagSuggestions.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Sugerencias basadas en tu solicitud:</p>
+                <div className="flex flex-wrap gap-2">
+                  {tagSuggestions.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => addSuggestedTag(tag)}
+                      className="px-2.5 py-1 text-xs bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700 rounded-full hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}

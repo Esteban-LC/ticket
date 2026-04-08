@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Kanban } fro
 import EventCard from './EventCard'
 import CreateEventModal from './CreateEventModal'
 import KanbanBoard from './KanbanBoard'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { useResourceStream } from '@/lib/useResourceStream'
 
 interface Event {
     id: string
@@ -31,7 +33,7 @@ interface Event {
     }
 }
 
-const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAYS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 const MONTHS = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -39,7 +41,13 @@ const MONTHS = [
 
 type ViewMode = 'CALENDAR' | 'KANBAN'
 
-export default function Calendar() {
+interface CalendarProps {
+    currentUserId: string
+    currentUserRole: string
+}
+
+export default function Calendar({ currentUserId, currentUserRole }: CalendarProps) {
+    const canManageEvent = (eventUserId: string) => eventUserId === currentUserId
     const [currentDate, setCurrentDate] = useState(new Date())
     const [events, setEvents] = useState<Event[]>([])
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -47,14 +55,10 @@ export default function Calendar() {
     const [loading, setLoading] = useState(true)
     const [viewMode, setViewMode] = useState<ViewMode>('CALENDAR')
     const [editingEvent, setEditingEvent] = useState<Event | null>(null)
+    const [eventToDelete, setEventToDelete] = useState<Event | null>(null)
 
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-
-    // Obtener eventos del mes actual
-    useEffect(() => {
-        fetchEvents()
-    }, [currentDate])
 
     const fetchEvents = async () => {
         try {
@@ -63,7 +67,8 @@ export default function Calendar() {
             const endOfMonth = new Date(year, month + 1, 0)
 
             const response = await fetch(
-                `/api/events?startDate=${startOfMonth.toISOString()}&endDate=${endOfMonth.toISOString()}`
+                `/api/events?startDate=${startOfMonth.toISOString()}&endDate=${endOfMonth.toISOString()}`,
+                { cache: 'no-store' }
             )
 
             if (response.ok) {
@@ -77,7 +82,11 @@ export default function Calendar() {
         }
     }
 
-    // Navegar meses
+    useEffect(() => {
+        fetchEvents()
+    }, [currentDate])
+    useResourceStream('events', fetchEvents)
+
     const previousMonth = () => {
         setCurrentDate(new Date(year, month - 1))
     }
@@ -90,7 +99,6 @@ export default function Calendar() {
         setCurrentDate(new Date())
     }
 
-    // Generar días del calendario
     const getDaysInMonth = () => {
         const firstDay = new Date(year, month, 1).getDay()
         const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -98,7 +106,6 @@ export default function Calendar() {
 
         const days: Array<{ date: Date; isCurrentMonth: boolean }> = []
 
-        // Días del mes anterior
         for (let i = firstDay - 1; i >= 0; i--) {
             days.push({
                 date: new Date(year, month - 1, daysInPrevMonth - i),
@@ -106,7 +113,6 @@ export default function Calendar() {
             })
         }
 
-        // Días del mes actual
         for (let i = 1; i <= daysInMonth; i++) {
             days.push({
                 date: new Date(year, month, i),
@@ -114,7 +120,6 @@ export default function Calendar() {
             })
         }
 
-        // Días del mes siguiente
         const remainingDays = 42 - days.length
         for (let i = 1; i <= remainingDays; i++) {
             days.push({
@@ -126,7 +131,6 @@ export default function Calendar() {
         return days
     }
 
-    // Obtener eventos de un día específico
     const getEventsForDay = (date: Date) => {
         return events.filter(event => {
             const eventDate = new Date(event.startDate)
@@ -138,7 +142,6 @@ export default function Calendar() {
         })
     }
 
-    // Verificar si es hoy
     const isToday = (date: Date) => {
         const today = new Date()
         return (
@@ -167,14 +170,42 @@ export default function Calendar() {
         setShowCreateModal(true)
     }
 
-    const handleEventCreated = () => {
-        fetchEvents()
+    const requestDeleteEvent = (event: Event) => {
+        setEventToDelete(event)
+    }
+
+    const handleDeleteEvent = async (id: string) => {
+        try {
+            const response = await fetch(`/api/events/${id}`, { method: 'DELETE', cache: 'no-store' })
+            if (response.ok) {
+                setEvents(prev => prev.filter(event => event.id !== id))
+                setEventToDelete(null)
+            }
+        } catch (error) {
+            console.error('Error al eliminar evento:', error)
+        }
+    }
+
+    const handleEventCreated = (savedEvent?: Event) => {
+        if (savedEvent?.id) {
+            setEvents(prev => {
+                const exists = prev.some(event => event.id === savedEvent.id)
+                if (exists) {
+                    return prev.map(event => event.id === savedEvent.id ? savedEvent : event)
+                }
+
+                const next = [...prev, savedEvent]
+                next.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+                return next
+            })
+        } else {
+            fetchEvents()
+        }
         setShowCreateModal(false)
         setSelectedDate(null)
         setEditingEvent(null)
     }
 
-    // Update event in local state (for optimistic updates)
     const handleEventUpdate = (updatedEvent: Event) => {
         setEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e))
     }
@@ -183,30 +214,25 @@ export default function Calendar() {
 
     return (
         <div className="bg-gray-50 dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
-            {/* Header - Completamente Responsivo */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-3 md:px-6 md:py-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
-                    {/* Parte Izquierda: Título y Switcher */}
                     <div className="flex items-center justify-between md:justify-start md:gap-4">
                         <div className="flex items-center gap-3 md:gap-4">
                             <h2 className="text-lg md:text-2xl font-bold text-white whitespace-nowrap">
                                 {MONTHS[month]} {year}
                             </h2>
 
-                            {/* View Switcher */}
                             <div className="flex bg-blue-700/50 p-1 rounded-lg">
                                 <button
                                     onClick={() => setViewMode('CALENDAR')}
-                                    className={`p-1.5 rounded-md transition-all ${viewMode === 'CALENDAR' ? 'bg-white text-blue-600 shadow-sm' : 'text-blue-100 hover:bg-white/10'
-                                        }`}
+                                    className={`p-1.5 rounded-md transition-all ${viewMode === 'CALENDAR' ? 'bg-white text-blue-600 shadow-sm' : 'text-blue-100 hover:bg-white/10'}`}
                                     title="Vista Calendario"
                                 >
                                     <CalendarIcon className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={() => setViewMode('KANBAN')}
-                                    className={`p-1.5 rounded-md transition-all ${viewMode === 'KANBAN' ? 'bg-white text-blue-600 shadow-sm' : 'text-blue-100 hover:bg-white/10'
-                                        }`}
+                                    className={`p-1.5 rounded-md transition-all ${viewMode === 'KANBAN' ? 'bg-white text-blue-600 shadow-sm' : 'text-blue-100 hover:bg-white/10'}`}
                                     title="Vista Kanban"
                                 >
                                     <Kanban className="w-4 h-4" />
@@ -214,7 +240,6 @@ export default function Calendar() {
                             </div>
                         </div>
 
-                        {/* Botón Hoy - Visible solo en móvil */}
                         <button
                             onClick={goToToday}
                             className="md:hidden px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-xs font-medium"
@@ -223,9 +248,7 @@ export default function Calendar() {
                         </button>
                     </div>
 
-                    {/* Parte Derecha: Controles (Hoy desktop, Nav, Nuevo) */}
                     <div className="flex items-center justify-between md:justify-end gap-2 md:gap-3">
-                        {/* Botón Hoy - Visible solo en desktop */}
                         <button
                             onClick={goToToday}
                             className="hidden md:block px-3 py-1.5 md:px-4 md:py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors text-xs md:text-sm font-medium"
@@ -251,6 +274,7 @@ export default function Calendar() {
                         </div>
                         <button
                             onClick={() => {
+                                setSelectedDate(null)
                                 setEditingEvent(null)
                                 setShowCreateModal(true)
                             }}
@@ -266,7 +290,6 @@ export default function Calendar() {
 
             {viewMode === 'CALENDAR' ? (
                 <>
-                    {/* Días de la semana */}
                     <div className="grid grid-cols-7 bg-gray-100 dark:bg-slate-700">
                         {DAYS.map(day => (
                             <div
@@ -278,7 +301,6 @@ export default function Calendar() {
                         ))}
                     </div>
 
-                    {/* Grid del calendario */}
                     <div className="grid grid-cols-7 bg-white dark:bg-slate-800">
                         {days.map((day, index) => {
                             const dayEvents = getEventsForDay(day.date)
@@ -305,19 +327,19 @@ export default function Calendar() {
                                         {day.date.getDate()}
                                     </div>
 
-                                    {/* Eventos del día */}
                                     <div className="space-y-0.5 md:space-y-1">
                                         {dayEvents.slice(0, 2).map(event => (
                                             <EventCard
                                                 key={event.id}
                                                 event={event}
                                                 compact
-                                                onEdit={handleEditEvent}
+                                                onEdit={canManageEvent(event.user.id) ? handleEditEvent : undefined}
+                                                onDelete={canManageEvent(event.user.id) ? () => requestDeleteEvent(event) : undefined}
                                             />
                                         ))}
                                         {dayEvents.length > 2 && (
                                             <div className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                                +{dayEvents.length - 2} más
+                                                +{dayEvents.length - 2} mas
                                             </div>
                                         )}
                                     </div>
@@ -332,11 +354,12 @@ export default function Calendar() {
                         events={events}
                         onEventUpdate={handleEventUpdate}
                         onEditEvent={handleEditEventFromKanban}
+                        currentUserId={currentUserId}
+                        currentUserRole={currentUserRole}
                     />
                 </div>
             )}
 
-            {/* Modal de crear evento */}
             {showCreateModal && (
                 <CreateEventModal
                     onClose={() => {
@@ -349,6 +372,17 @@ export default function Calendar() {
                     eventToEdit={editingEvent}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={Boolean(eventToDelete)}
+                onClose={() => setEventToDelete(null)}
+                onConfirm={() => eventToDelete && handleDeleteEvent(eventToDelete.id)}
+                title="Eliminar evento"
+                message={eventToDelete ? `Se eliminara "${eventToDelete.title}". Esta accion no se puede deshacer.` : ''}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+            />
         </div>
     )
 }

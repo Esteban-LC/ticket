@@ -77,18 +77,27 @@ export default function EventCard({ event, onDelete, onEdit, compact }: EventCar
     if (compact) {
         return (
             <div
-                onClick={(e) => {
-                    e.stopPropagation()
-                    if (onEdit) onEdit(event.id)
-                }}
-                className="group relative flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-slate-800 border-l-2 text-xs hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-r cursor-pointer overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+                className="group relative flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-slate-800 border-l-2 text-xs hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors rounded-r overflow-hidden"
                 style={{ borderLeftColor: event.color || '#3b82f6' }}
                 title={`${event.title} - ${formatTime(startDate)}`}
             >
-                <div className="flex-1 truncate font-medium text-gray-700 dark:text-gray-200">
+                <div
+                    className={`flex-1 truncate font-medium text-gray-700 dark:text-gray-200 ${onEdit ? 'cursor-pointer' : ''}`}
+                    onClick={() => { if (onEdit) onEdit(event.id) }}
+                >
                     {!event.allDay && <span className="opacity-75 mr-1">{formatTime(startDate)}</span>}
                     {event.title}
                 </div>
+                {onDelete && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(event.id) }}
+                        className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-0.5 hover:bg-red-100 rounded transition-all"
+                        title="Eliminar"
+                    >
+                        <X className="w-3 h-3 text-red-500" />
+                    </button>
+                )}
             </div>
         )
     }
@@ -116,15 +125,6 @@ export default function EventCard({ event, onDelete, onEdit, compact }: EventCar
                         </div>
                     </div>
 
-                    {onDelete && (
-                        <button
-                            onClick={() => onDelete(event.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded transition-all"
-                            title="Eliminar evento"
-                        >
-                            <X className="w-4 h-4 text-red-600" />
-                        </button>
-                    )}
                 </div>
 
                 {/* Description */}
@@ -167,14 +167,24 @@ export default function EventCard({ event, onDelete, onEdit, compact }: EventCar
                 )}
 
                 {/* Actions */}
-                {onEdit && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                        <button
-                            onClick={() => onEdit(event.id)}
-                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                            Editar evento
-                        </button>
+                {(onEdit || onDelete) && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3">
+                        {onEdit && (
+                            <button
+                                onClick={() => onEdit(event.id)}
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                                Editar
+                            </button>
+                        )}
+                        {onDelete && (
+                            <button
+                                onClick={() => onDelete(event.id)}
+                                className="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
+                            >
+                                <X className="w-3.5 h-3.5" /> Eliminar
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

@@ -25,8 +25,8 @@ export async function POST(request: Request) {
     }
 
     // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
+    const existingUser = await prisma.user.findFirst({
+      where: { email, deletedAt: null }
     })
 
     if (existingUser) {
@@ -40,7 +40,9 @@ export async function POST(request: Request) {
     const hashedPassword = await bcrypt.hash(password, 10)
 
     // Verificar si es el primer usuario (será admin)
-    const userCount = await prisma.user.count()
+    const userCount = await prisma.user.count({
+      where: { deletedAt: null }
+    })
     const role = userCount === 0 ? 'ADMIN' : 'EDITOR'
 
     // Create user
@@ -73,3 +75,4 @@ export async function POST(request: Request) {
     )
   }
 }
+

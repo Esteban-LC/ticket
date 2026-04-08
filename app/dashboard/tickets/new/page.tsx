@@ -37,7 +37,7 @@ export default async function NewTicketPage() {
         <MobileHeader title="Nuevo Ticket" />
 
         <main className="flex-1 overflow-y-auto">
-          <CreateTicketForm currentUser={{ id: user.id, role: user.role }} />
+          <CreateTicketForm currentUser={{ id: user.id, role: user.role, name: user.name || '' }} />
         </main>
       </div>
     </div>

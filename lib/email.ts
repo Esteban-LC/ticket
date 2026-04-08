@@ -43,12 +43,12 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams) {
 
 export function getTicketCreatedEmailTemplate(data: {
   customerName: string
-  ticketNumber: number
+  ticketIdentifier: string
   subject: string
   description: string
 }) {
   return {
-    subject: `Ticket #${data.ticketNumber} creado - ${data.subject}`,
+    subject: `Ticket ${data.ticketIdentifier} creado - ${data.subject}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -72,7 +72,7 @@ export function getTicketCreatedEmailTemplate(data: {
             <p>Tu ticket ha sido creado exitosamente. Nuestro equipo de soporte lo revisará pronto.</p>
             
             <div class="ticket-info">
-              <h2>Ticket #${data.ticketNumber}</h2>
+              <h2>Ticket ${data.ticketIdentifier}</h2>
               <p><strong>Asunto:</strong> ${data.subject}</p>
               <p><strong>Descripción:</strong></p>
               <p>${data.description}</p>
@@ -93,13 +93,13 @@ export function getTicketCreatedEmailTemplate(data: {
 
 export function getTicketReplyEmailTemplate(data: {
   customerName: string
-  ticketNumber: number
+  ticketIdentifier: string
   subject: string
   replyContent: string
   agentName: string
 }) {
   return {
-    subject: `Re: Ticket #${data.ticketNumber} - ${data.subject}`,
+    subject: `Re: Ticket ${data.ticketIdentifier} - ${data.subject}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -120,7 +120,7 @@ export function getTicketReplyEmailTemplate(data: {
           </div>
           <div class="content">
             <p>Hola <strong>${data.customerName}</strong>,</p>
-            <p>Has recibido una nueva respuesta en tu ticket <strong>#${data.ticketNumber}</strong>.</p>
+            <p>Has recibido una nueva respuesta en tu ticket <strong>${data.ticketIdentifier}</strong>.</p>
             
             <div class="reply-box">
               <p><strong>${data.agentName}</strong> respondió:</p>

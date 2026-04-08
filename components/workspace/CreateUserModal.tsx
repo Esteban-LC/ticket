@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X, UserPlus, Eye, EyeOff, Loader2, CheckCircle2, Copy, Check, FolderTree, Mail, KeyRound, User } from 'lucide-react'
 import OrgUnitCombobox from './OrgUnitCombobox'
+import UnsavedChangesDialog from '@/components/ui/UnsavedChangesDialog'
+import { useUnsavedChangesWarning } from '@/lib/useUnsavedChangesWarning'
+import { emitClientResourceEvent } from '@/lib/clientResourceEvents'
 
 interface OrgUnit {
   orgUnitId: string
@@ -23,7 +26,14 @@ interface CreatedUserInfo {
   email: string
   password: string
   orgUnitPath: string
-  changePasswordAtNextLogin: boolean
+  wordPressUser?: {
+    attempted: boolean
+    created: boolean
+    message: string
+    user_id?: number
+    username?: string
+    role?: string
+  }
 }
 
 export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose, onCreated }: CreateUserModalProps) {
@@ -32,14 +42,30 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
     familyName: '',
     primaryEmail: '',
     password: '',
+    wordPressUsername: '',
     orgUnitPath: defaultOrgUnitPath || '/',
-    changePasswordAtNextLogin: true,
+    createWordPressUser: true,
   })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdUser, setCreatedUser] = useState<CreatedUserInfo | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+
+  const hasUnsavedChanges = useMemo(() => (
+    !createdUser && (
+      form.givenName.trim() !== '' ||
+      form.familyName.trim() !== '' ||
+      form.primaryEmail.trim() !== '' ||
+      form.password.trim() !== '' ||
+      form.wordPressUsername.trim() !== '' ||
+      form.orgUnitPath !== (defaultOrgUnitPath || '/') ||
+      form.createWordPressUser !== true
+    )
+  ), [createdUser, defaultOrgUnitPath, form])
+
+  useUnsavedChangesWarning(hasUnsavedChanges)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -58,13 +84,17 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
         throw new Error(data.error || 'Error al crear usuario')
       }
 
+      const data = await res.json()
+
+      emitClientResourceEvent('workspace', { action: 'created', targetEmail: form.primaryEmail })
+
       // Guardar info del usuario creado para mostrar resumen
       setCreatedUser({
         fullName: `${form.givenName} ${form.familyName}`,
         email: form.primaryEmail,
         password: form.password,
         orgUnitPath: form.orgUnitPath,
-        changePasswordAtNextLogin: form.changePasswordAtNextLogin,
+        wordPressUser: data?.wordPressUser,
       })
     } catch (err: any) {
       setError(err.message)
@@ -95,6 +125,20 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
     if (createdUser) {
       onCreated()
     }
+    onClose()
+  }
+
+  const handleRequestClose = () => {
+    if (loading || createdUser) {
+      handleClose()
+      return
+    }
+
+    if (hasUnsavedChanges) {
+      setShowUnsavedDialog(true)
+      return
+    }
+
     onClose()
   }
 
@@ -160,7 +204,7 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
             <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg">
               <KeyRound className="h-4 w-4 text-amber-500 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-amber-600 dark:text-amber-400">Contraseña {createdUser.changePasswordAtNextLogin && '(temporal)'}</p>
+                <p className="text-xs text-amber-600 dark:text-amber-400">Contraseña</p>
                 <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">{createdUser.password}</p>
               </div>
               <button
@@ -182,10 +226,25 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
               </div>
             </div>
 
-            {createdUser.changePasswordAtNextLogin && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-1">
-                El usuario deberá cambiar su contraseña en el primer inicio de sesión
-              </p>
+            {createdUser.wordPressUser?.attempted && (
+              <div
+                className={`flex items-center gap-3 p-3 rounded-lg border ${
+                  createdUser.wordPressUser.created
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/50'
+                    : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50'
+                }`}
+              >
+                <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Usuario WordPress</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {createdUser.wordPressUser.created ? 'Creado correctamente' : 'No se pudo crear'}
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    {createdUser.wordPressUser.message}
+                  </p>
+                </div>
+              </div>
             )}
 
             {/* Botón copiar todo */}
@@ -241,7 +300,7 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition"
           >
             <X className="h-5 w-5 text-gray-500" />
@@ -299,6 +358,25 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
             />
           </div>
 
+          {form.createWordPressUser && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Usuario WP *
+              </label>
+              <input
+                type="text"
+                required={form.createWordPressUser}
+                value={form.wordPressUsername}
+                onChange={(e) => setForm({ ...form, wordPressUsername: e.target.value })}
+                className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="juan.perez"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Este usuario es obligatorio para WordPress. Usa solo letras, numeros, punto, guion y guion bajo.
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Contraseña *
@@ -332,13 +410,13 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
-              id="changePassword"
-              checked={form.changePasswordAtNextLogin}
-              onChange={(e) => setForm({ ...form, changePasswordAtNextLogin: e.target.checked })}
+              id="createWordPressUser"
+              checked={form.createWordPressUser}
+              onChange={(e) => setForm({ ...form, createWordPressUser: e.target.checked })}
               className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
             />
-            <label htmlFor="changePassword" className="text-sm text-gray-700 dark:text-gray-300">
-              Solicitar cambio de contraseña en el primer inicio de sesión
+            <label htmlFor="createWordPressUser" className="text-sm text-gray-700 dark:text-gray-300">
+              Crear tambien en Usuarios WP (rol subscriber)
             </label>
           </div>
 
@@ -346,7 +424,7 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
           <div className="flex gap-3 pt-4 border-t dark:border-slate-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition font-medium"
             >
               Cancelar
@@ -371,6 +449,14 @@ export default function CreateUserModal({ orgUnits, defaultOrgUnitPath, onClose,
           </div>
         </form>
       </div>
+      <UnsavedChangesDialog
+        isOpen={showUnsavedDialog}
+        onKeepEditing={() => setShowUnsavedDialog(false)}
+        onDiscard={() => {
+          setShowUnsavedDialog(false)
+          onClose()
+        }}
+      />
     </div>
   )
 }

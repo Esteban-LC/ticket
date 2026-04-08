@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { tutorLMSService } from '@/lib/wordpress/tutor-lms'
+import { wpClient } from '@/lib/wordpress/client'
 
 /**
  * GET /api/wordpress/courses
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
     const userPermissions = (session.user as any).permissions || []
     if (
       !userPermissions.includes('wordpress:manage_courses') &&
+      !userPermissions.includes('wordpress:manage_users') &&
       !userPermissions.includes('wordpress:access') &&
       session.user.role !== 'ADMIN'
     ) {
@@ -31,12 +33,22 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || undefined
     const status = searchParams.get('status') as 'publish' | 'draft' | 'pending' | undefined
 
-    const courses = await tutorLMSService.getCourses({
-      page,
-      per_page,
-      search,
-      status,
-    })
+    let courses: any[] = []
+    try {
+      courses = await tutorLMSService.getCourses({
+        page,
+        per_page,
+        search,
+        status,
+      })
+    } catch (primaryError: any) {
+      console.warn('Primary /wp/v2/courses failed, trying /custom/v1/courses:', primaryError?.message || primaryError)
+      const fallback = await wpClient.get<{ courses: any[] }>(
+        '/custom/v1/courses',
+        { page, per_page, search, status }
+      )
+      courses = fallback.courses || []
+    }
 
     return NextResponse.json({ courses })
   } catch (error: any) {

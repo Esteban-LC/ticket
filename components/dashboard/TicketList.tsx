@@ -10,6 +10,7 @@ import MobileTicketCard from './MobileTicketCard'
 interface Ticket {
   id: string
   number: number
+  ticketCode: string | null
   subject: string
   status: TicketStatus
   priority: TicketPriority
@@ -66,6 +67,7 @@ const priorityLabels = {
 
 export default function TicketList({ tickets, currentUserId }: TicketListProps) {
   const router = useRouter()
+  const getTicketIdentifier = (ticket: Ticket) => ticket.ticketCode || `#${ticket.number}`
 
   const handleAssign = async (ticketId: string) => {
     try {
@@ -137,7 +139,7 @@ export default function TicketList({ tickets, currentUserId }: TicketListProps) 
               >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-primary-600 font-medium">
-                    #{ticket.number}
+                    {getTicketIdentifier(ticket)}
                   </div>
                   <div className="text-sm text-gray-900 dark:text-white mt-1">{ticket.subject}</div>
                   <div className="text-xs text-gray-500 mt-1">

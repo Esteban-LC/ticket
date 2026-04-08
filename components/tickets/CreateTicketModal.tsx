@@ -1,8 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
+
+const STOP_WORDS = new Set([
+  'a', 'al', 'con', 'de', 'del', 'e', 'el', 'en', 'es', 'esta', 'este', 'esto',
+  'la', 'las', 'le', 'les', 'lo', 'los', 'más', 'me', 'mi', 'no', 'o', 'para',
+  'por', 'que', 'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'un', 'una', 'uno',
+  'y', 'ya', 'yo', 'nos', 'ha', 'hay', 'como', 'ser', 'son', 'fue', 'sea',
+])
+
+function extractTagSuggestions(fields: string[], existingTags: string[]): string[] {
+  const text = fields.join(' ')
+  const existing = new Set(existingTags.map(t => t.toLowerCase().trim()))
+  const seen = new Set<string>()
+  const suggestions: string[] = []
+
+  const words = text.split(/[\s,;:.!?()[\]{}\-/\\]+/)
+  for (const word of words) {
+    const clean = word.replace(/[^a-záéíóúüñA-ZÁÉÍÓÚÜÑ]/g, '').toLowerCase()
+    if (clean.length >= 4 && !STOP_WORDS.has(clean) && !seen.has(clean) && !existing.has(clean)) {
+      seen.add(clean)
+      suggestions.push(clean)
+    }
+    if (suggestions.length >= 8) break
+  }
+  return suggestions
+}
 
 interface CreateTicketModalProps {
   isOpen: boolean
@@ -15,9 +40,25 @@ export default function CreateTicketModal({ isOpen, onClose }: CreateTicketModal
   const [formData, setFormData] = useState({
     subject: '',
     description: '',
-    priority: 'NORMAL',
     tags: '',
   })
+
+  const existingTags = useMemo(
+    () => formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+    [formData.tags]
+  )
+
+  const tagSuggestions = useMemo(
+    () => extractTagSuggestions([formData.subject, formData.description], existingTags),
+    [formData.subject, formData.description, existingTags]
+  )
+
+  const addSuggestedTag = (tag: string) => {
+    const current = formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+    if (!current.includes(tag)) {
+      setFormData({ ...formData, tags: [...current, tag].join(', ') })
+    }
+  }
 
   if (!isOpen) return null
 
@@ -96,22 +137,6 @@ export default function CreateTicketModal({ isOpen, onClose }: CreateTicketModal
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Prioridad
-              </label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="LOW">Baja</option>
-                <option value="NORMAL">Normal</option>
-                <option value="HIGH">Alta</option>
-                <option value="URGENT">Urgente</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Etiquetas
               </label>
               <input
@@ -119,8 +144,25 @@ export default function CreateTicketModal({ isOpen, onClose }: CreateTicketModal
                 value={formData.tags}
                 onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="Separa las etiquetas con comas (ej: bug, urgente)"
+                placeholder="Separa las etiquetas con comas"
               />
+              {tagSuggestions.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-400 mb-1.5">Sugerencias:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tagSuggestions.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => addSuggestedTag(tag)}
+                        className="px-2 py-0.5 text-xs bg-teal-50 text-teal-700 border border-teal-200 rounded-full hover:bg-teal-100 transition-colors"
+                      >
+                        + {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-3 pt-4">

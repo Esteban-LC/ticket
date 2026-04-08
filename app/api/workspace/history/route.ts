@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { canAccessWorkspaceHistory } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true, permissions: true },
+    })
+
+    if (!canAccessWorkspaceHistory(currentUser)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
