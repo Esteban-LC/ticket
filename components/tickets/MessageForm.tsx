@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Sparkles, X, Reply, Lock, Smile, File as LucideFile, Video, Mic, Square } from 'lucide-react'
+import { Send, Sparkles, X, Reply, Lock, Smile, File as LucideFile, Video, Mic, Trash2, Pause, Play, Check } from 'lucide-react'
 
 interface ReplyTo {
   id: string
@@ -77,6 +77,11 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
   const [recording, setRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [canRecordAudio, setCanRecordAudio] = useState(false)
+  const [recordingCancelled, setRecordingCancelled] = useState(false)
+  const [recordingLocked, setRecordingLocked] = useState(false)
+  const [recordingPaused, setRecordingPaused] = useState(false)
+  const [recordingPreview, setRecordingPreview] = useState<{ file: File; url: string } | null>(null)
+  const [showLockHint, setShowLockHint] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
@@ -86,6 +91,10 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const recordingChunksRef = useRef<BlobPart[]>([])
+  const pointerStartXRef = useRef<number>(0)
+  const pointerStartYRef = useRef<number>(0)
+  const recordingStartTimeRef = useRef<number>(0)
 
   useEffect(() => {
     if (replyTo) textareaRef.current?.focus()
@@ -102,7 +111,13 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    setCanRecordAudio(Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined')
+    setCanRecordAudio(
+      Boolean(navigator.mediaDevices?.getUserMedia) &&
+      typeof MediaRecorder !== 'undefined' &&
+      (MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ||
+        MediaRecorder.isTypeSupported('audio/mp4') ||
+        MediaRecorder.isTypeSupported('audio/ogg'))
+    )
   }, [])
 
   useEffect(() => {
@@ -112,6 +127,7 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
         mediaRecorderRef.current.stop()
       }
       mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+      setRecordingPreview(prev => { if (prev) URL.revokeObjectURL(prev.url); return null })
     }
   }, [])
 
@@ -227,37 +243,58 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
       mediaStreamRef.current = stream
 
       const mimeType =
-        MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : MediaRecorder.isTypeSupported('audio/mp4')
-            ? 'audio/mp4'
-            : ''
+        MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
+          : MediaRecorder.isTypeSupported('audio/ogg') ? 'audio/ogg'
+          : ''
 
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      const chunks: BlobPart[] = []
+      if (!mimeType) {
+        stopMediaStream()
+        audioInputRef.current?.click()
+        return
+      }
+
+      let recorder: MediaRecorder
+      try {
+        recorder = new MediaRecorder(stream, { mimeType })
+      } catch {
+        stopMediaStream()
+        audioInputRef.current?.click()
+        return
+      }
+
+      recordingChunksRef.current = []
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunks.push(event.data)
+        if (event.data.size > 0) recordingChunksRef.current.push(event.data)
       }
 
       recorder.onstop = () => {
+        const chunks = recordingChunksRef.current
+        recordingChunksRef.current = []
         if (!chunks.length) {
           stopMediaStream()
           return
         }
-
         const blobType = recorder.mimeType || 'audio/webm'
         const extension = blobType.includes('mp4') ? 'm4a' : blobType.includes('ogg') ? 'ogg' : 'webm'
         const file = new File([new Blob(chunks, { type: blobType })], `audio-${Date.now()}.${extension}`, {
           type: blobType,
         })
+        const url = URL.createObjectURL(file)
+        setRecordingPreview({ file, url })
+        stopMediaStream()
+      }
 
-        addAttachmentFile(file, { sourceKind: 'recording', displayInline: true })
+      recorder.onerror = () => {
+        setRecording(false)
+        setRecordingTime(0)
         stopMediaStream()
       }
 
       recorder.start()
       mediaRecorderRef.current = recorder
+      recordingStartTimeRef.current = Date.now()
       setRecording(true)
       setRecordingTime(0)
 
@@ -266,7 +303,6 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
       }, 1000)
     } catch (error) {
       console.error('No se pudo iniciar la grabacion:', error)
-      alert('No se pudo acceder al microfono')
       stopMediaStream()
     }
   }
@@ -276,15 +312,147 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
       clearInterval(recordingIntervalRef.current)
       recordingIntervalRef.current = null
     }
-
     setRecording(false)
     setRecordingTime(0)
-
+    setRecordingLocked(false)
+    setRecordingPaused(false)
+    setShowLockHint(false)
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      if (mediaRecorderRef.current.state === 'paused') {
+        mediaRecorderRef.current.resume()
+      }
       mediaRecorderRef.current.stop()
     } else {
       stopMediaStream()
     }
+  }
+
+  const cancelAudioRecording = () => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current)
+      recordingIntervalRef.current = null
+    }
+    setRecording(false)
+    setRecordingTime(0)
+    setRecordingCancelled(false)
+    setRecordingLocked(false)
+    setRecordingPaused(false)
+    setShowLockHint(false)
+    recordingChunksRef.current = []
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = null
+      if (mediaRecorderRef.current.state === 'paused') {
+        mediaRecorderRef.current.resume()
+      }
+      mediaRecorderRef.current.stop()
+    }
+    stopMediaStream()
+  }
+
+  const pauseAudioRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.pause()
+      setRecordingPaused(true)
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+        recordingIntervalRef.current = null
+      }
+    }
+  }
+
+  const resumeAudioRecording = () => {
+    if (mediaRecorderRef.current?.state === 'paused') {
+      mediaRecorderRef.current.resume()
+      setRecordingPaused(false)
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+    }
+  }
+
+  const confirmAudioRecording = async () => {
+    if (!recordingPreview) return
+
+    const file = recordingPreview.file
+    URL.revokeObjectURL(recordingPreview.url)
+    setRecordingPreview(null)
+    setLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('ticketId', ticketId)
+      formData.append('attachmentKind', 'recording')
+      formData.append('displayInline', 'true')
+
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}))
+        throw new Error(err.error || 'Error al subir el audio')
+      }
+      const uploadData = await uploadRes.json()
+      if (typeof uploadData.serializedAttachment !== 'string') throw new Error('Respuesta inválida al subir el audio')
+
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticketId,
+          content: '',
+          attachments: [uploadData.serializedAttachment],
+          ...(replyTo && replyTo.id !== 'description' ? { replyToId: replyTo.id } : {}),
+        }),
+      })
+      if (!res.ok) throw new Error('Error al enviar mensaje')
+      const message = await res.json()
+      onMessageSent?.(message)
+      onClearReply?.()
+    } catch (error: any) {
+      console.error('Error sending audio:', error)
+      alert(error.message || 'Error al enviar el audio')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const discardAudioPreview = () => {
+    if (!recordingPreview) return
+    URL.revokeObjectURL(recordingPreview.url)
+    setRecordingPreview(null)
+  }
+
+  const handleMicPointerDown = async (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    ;(e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId)
+    pointerStartXRef.current = e.clientX
+    pointerStartYRef.current = e.clientY
+    setRecordingCancelled(false)
+    setShowLockHint(false)
+    await startAudioRecording()
+  }
+
+  const handleMicPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!recording) return
+    const deltaX = e.clientX - pointerStartXRef.current
+    const deltaY = e.clientY - pointerStartYRef.current
+    setRecordingCancelled(deltaX < -60)
+    setShowLockHint(deltaY < -40)
+  }
+
+  const handleMicPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!recording) return
+    const elapsed = Date.now() - recordingStartTimeRef.current
+    const deltaX = e.clientX - pointerStartXRef.current
+    const deltaY = e.clientY - pointerStartYRef.current
+    if (elapsed < 500 || deltaX < -60) {
+      cancelAudioRecording()
+    } else if (deltaY < -40) {
+      setRecordingLocked(true)
+      setShowLockHint(false)
+    } else {
+      stopAudioRecording()
+    }
+    setRecordingCancelled(false)
   }
 
   const formatRecordingTime = (seconds: number) => {
@@ -535,8 +703,43 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
             </div>
           )}
 
+          {recordingPreview && (
+            <div className="mx-auto flex items-center gap-2 w-full max-w-5xl mb-2">
+              <div className="flex-1 h-11 flex items-center gap-2 rounded-[1.75rem] border border-emerald-600/40 bg-[#1a2e28] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <Mic className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <audio controls src={recordingPreview.url} className="flex-1 h-8" style={{ colorScheme: 'dark' }} />
+              </div>
+              <button
+                type="button"
+                onClick={discardAudioPreview}
+                className="flex-shrink-0 h-11 w-11 flex items-center justify-center rounded-full bg-[#31424d] border border-white/10 text-red-400 hover:bg-red-900/30 transition-colors"
+                title="Descartar"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={confirmAudioRecording}
+                className="flex-shrink-0 h-11 w-11 flex items-center justify-center rounded-full bg-[#1a6650] border border-emerald-600 text-emerald-300 hover:bg-[#22805e] transition-colors"
+                title="Confirmar"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           <div className="mx-auto flex items-center gap-2 w-full max-w-5xl">
             <div className="flex-1 h-14 flex items-center gap-1.5 rounded-[1.75rem] border border-white/10 bg-[#31424d] px-2.5 sm:px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+              {recordingLocked ? (
+                <button
+                  type="button"
+                  onClick={cancelAudioRecording}
+                  className="h-9 w-9 flex items-center justify-center rounded-full text-red-400 hover:text-red-300 hover:bg-white/5 transition-colors flex-shrink-0"
+                  title="Cancelar grabacion"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+              ) : (
               <div className="relative flex items-center" ref={emojiPickerRef}>
                 <button
                   type="button"
@@ -573,23 +776,76 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
                   </div>
                 )}
               </div>
+              )}
 
-              <div className="flex-1 h-full flex items-center relative">
-                <textarea
-                  ref={textareaRef}
-                  value={content}
-                  onChange={(e) => {
-                    setContent(e.target.value)
-                    if (e.target.value) emitTyping()
-                  }}
-                  onKeyDown={handleKeyDown}
-                  onPaste={handlePaste}
-                  placeholder="Escribe un mensaje..."
-                  rows={1}
-                  className="w-full min-h-[24px] max-h-32 px-2 py-0 bg-transparent text-white placeholder:text-[#aebac1] border-0 focus:outline-none resize-none text-sm leading-6 align-middle"
-                />
+              <div className="flex-1 h-full flex items-center relative overflow-hidden">
+                {recording ? (
+                  <>
+                    <style>{`
+                      @keyframes waveform-bar {
+                        0%, 100% { transform: scaleY(0.35); }
+                        50% { transform: scaleY(1); }
+                      }
+                    `}</style>
+                    <span className={`inline-flex h-2 w-2 rounded-full flex-shrink-0 ml-1 mr-2 ${recordingPaused ? 'bg-yellow-400' : 'bg-red-500 animate-pulse'}`} />
+                    <span className={`text-sm font-mono tabular-nums min-w-[40px] mr-3 ${recordingPaused ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {formatRecordingTime(recordingTime)}
+                    </span>
+                    <div className="flex-1 flex items-center justify-center gap-[3px] h-full overflow-hidden">
+                      {recordingPaused ? (
+                        <span className="text-xs text-yellow-400 font-medium">En pausa</span>
+                      ) : (
+                        [10,16,22,18,26,20,14,24,18,12,20,26,18,14,22,16,24,20].map((h, i) => (
+                          <div
+                            key={i}
+                            className="w-[3px] rounded-full flex-shrink-0"
+                            style={{
+                              height: `${h}px`,
+                              background: recordingCancelled ? '#f87171' : '#34d399',
+                              animation: 'waveform-bar 0.8s ease-in-out infinite',
+                              animationDelay: `${i * 0.05}s`,
+                            }}
+                          />
+                        ))
+                      )}
+                    </div>
+                    {recordingLocked ? (
+                      <button
+                        type="button"
+                        onClick={recordingPaused ? resumeAudioRecording : pauseAudioRecording}
+                        className={`ml-2 h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${recordingPaused ? 'text-yellow-400 hover:bg-yellow-400/10' : 'text-gray-400 hover:bg-white/5'}`}
+                        title={recordingPaused ? 'Reanudar' : 'Pausar'}
+                      >
+                        {recordingPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                      </button>
+                    ) : (
+                      <span className={`text-xs whitespace-nowrap ml-3 transition-colors flex items-center gap-1 ${recordingCancelled ? 'text-red-400 font-medium' : showLockHint ? 'text-emerald-400' : 'text-gray-400'}`}>
+                        {showLockHint ? (
+                          <><Lock className="h-3 w-3" /><span>Soltar para bloquear</span></>
+                        ) : (
+                          <><span>←</span><span>Cancelar</span></>
+                        )}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    value={content}
+                    onChange={(e) => {
+                      setContent(e.target.value)
+                      if (e.target.value) emitTyping()
+                    }}
+                    onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
+                    placeholder="Escribe un mensaje..."
+                    rows={1}
+                    className="w-full min-h-[24px] max-h-32 px-2 py-0 bg-transparent text-white placeholder:text-[#aebac1] border-0 focus:outline-none resize-none text-sm leading-6 align-middle"
+                  />
+                )}
               </div>
 
+              {!recording && (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -598,6 +854,7 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
               >
                 <LucideFile className="h-5 w-5" />
               </button>
+              )}
 
               <input
                 ref={fileInputRef}
@@ -612,42 +869,66 @@ export default function MessageForm({ ticketId, replyTo, onClearReply, onMessage
                 ref={audioInputRef}
                 type="file"
                 accept="audio/*"
-                capture
                 onChange={handleAttachmentSelect}
                 className="hidden"
               />
             </div>
 
-            <button
-              type={canSend ? 'submit' : 'button'}
-              onClick={canSend ? undefined : (recording ? stopAudioRecording : startAudioRecording)}
-              disabled={loading || aiLoading}
-              className={`flex-shrink-0 h-14 w-14 flex items-center justify-center rounded-full border border-white/10 bg-[#31424d] text-white shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                recording ? 'hover:bg-[#7a3340]' : 'hover:bg-[#3a4d59]'
-              }`}
-              title={canSend ? 'Enviar mensaje' : recording ? 'Detener grabacion' : canRecordAudio ? 'Grabar audio' : 'Adjuntar audio'}
-            >
-              {aiLoading ? (
-                <Sparkles className="h-5 w-5 animate-pulse" />
-              ) : loading ? (
-                <Send className="h-5 w-5 animate-pulse" />
-              ) : canSend ? (
-                <Send className="h-5 w-5" />
-              ) : recording ? (
-                <Square className="h-5 w-5" />
-              ) : (
-                <Mic className="h-5 w-5 text-white" />
+            <div className="relative flex-shrink-0">
+              {recording && !recordingLocked && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 flex flex-col items-center pointer-events-none">
+                  <div className={`h-9 w-9 rounded-full border-2 flex items-center justify-center transition-all duration-150 ${showLockHint ? 'bg-emerald-500 border-emerald-400 scale-110' : 'bg-[#31424d] border-white/20'}`}>
+                    <Lock className={`h-4 w-4 ${showLockHint ? 'text-white' : 'text-gray-400'}`} />
+                  </div>
+                  <div className="w-px h-3 bg-gray-500/40" />
+                </div>
               )}
-            </button>
+              <button
+                type={canSend && !recordingLocked ? 'submit' : 'button'}
+                disabled={loading || aiLoading}
+                onClick={
+                  recordingLocked ? stopAudioRecording
+                    : canSend ? handleSubmit
+                    : canRecordAudio ? undefined
+                    : () => audioInputRef.current?.click()
+                }
+                onPointerDown={!canSend && canRecordAudio && !recording ? handleMicPointerDown : undefined}
+                onPointerMove={!canSend && canRecordAudio && recording && !recordingLocked ? handleMicPointerMove : undefined}
+                onPointerUp={!canSend && canRecordAudio && recording && !recordingLocked ? handleMicPointerUp : undefined}
+                onPointerCancel={!canSend && canRecordAudio && recording && !recordingLocked ? () => cancelAudioRecording() : undefined}
+                className={`h-14 w-14 flex items-center justify-center rounded-full border border-white/10 bg-[#31424d] text-white shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed select-none touch-none ${
+                  recordingLocked
+                    ? 'bg-[#1a6650] border-emerald-600 hover:bg-[#22805e]'
+                    : recording
+                      ? recordingCancelled ? 'bg-red-800 border-red-600' : 'bg-[#1a6650] border-emerald-600'
+                      : 'hover:bg-[#3a4d59]'
+                }`}
+                title={
+                  recordingLocked ? 'Enviar audio'
+                    : canSend ? 'Enviar mensaje'
+                    : recording ? 'Suelta para enviar o sube para bloquear'
+                    : canRecordAudio ? 'Mantén presionado para grabar'
+                    : 'Adjuntar audio'
+                }
+              >
+                {aiLoading ? (
+                  <Sparkles className="h-5 w-5 animate-pulse" />
+                ) : loading ? (
+                  <Send className="h-5 w-5 animate-pulse" />
+                ) : recordingLocked ? (
+                  <Send className="h-5 w-5 text-emerald-300" />
+                ) : canSend ? (
+                  <Send className="h-5 w-5" />
+                ) : recording ? (
+                  <Mic className={`h-5 w-5 ${recordingCancelled ? 'text-red-300' : 'text-emerald-300'}`} />
+                ) : (
+                  <Mic className="h-5 w-5 text-white" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
-        {recording && (
-          <div className="mx-auto mt-2 flex items-center gap-2 text-xs text-red-400 w-full max-w-5xl px-1">
-            <span className="inline-flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-            <span>Grabando audio {formatRecordingTime(recordingTime)}</span>
-          </div>
-        )}
       </form>
 
       {lightboxUrl && (
